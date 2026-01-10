@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Output files
+passive-recon/output/
+passive-recon/checkpoints/
+*.csv
+*.json
+!passive-recon/config.json.example
+!**/requirements.txt
+
+# Sensitive data
+config.json
+*bearer*
+*token*
+*cookie*
+*_temp_config.json
+
+# Keep structure
+!passive-recon/output/.gitkeep
+!passive-recon/checkpoints/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
