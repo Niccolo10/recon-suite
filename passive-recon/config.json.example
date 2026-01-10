@@ -45,6 +45,10 @@
         {
           "cookie": "YOUR_COOKIES_HERE",
           "proxy": null
+        },
+        {
+          "cookie": "YOUR_SECOND_COOKIE_HERE",
+          "proxy": null
         }
       ]
     },
