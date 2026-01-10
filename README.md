@@ -4,15 +4,6 @@
 
 ---
 
-## Philosophy
-
-- **Phased, not monolithic** - Each phase produces files that feed the next. You control when to proceed.
-- **Scope is sacred** - Every phase enforces scope. Out-of-scope assets are filtered or flagged.
-- **Analysis over enumeration** - Finding 50,000 subdomains means nothing. Understanding 500 interesting ones means everything.
-- **Custom where it matters** - Wrap battle-tested tools for commodity tasks. Build custom for analytical tasks.
-
----
-
 ## Architecture
 
 ```
