@@ -19,13 +19,15 @@ passive-recon/checkpoints/
 !passive-recon/config.json.example
 !**/requirements.txt
 
+# Input files - protect target domains
+passive-recon/input/domains.txt
+
 # Sensitive data
 config.json
 *bearer*
 *token*
 *cookie*
 *_temp_config.json
-input/domains.txt
 
 # Keep structure
 !passive-recon/output/.gitkeep
