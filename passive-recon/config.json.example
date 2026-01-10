@@ -1,0 +1,81 @@
+{
+  "input": {
+    "domains_file": "./input/domains.txt",
+    "resume_from_checkpoint": true
+  },
+  
+  "output": {
+    "final_results": "./output/final_results.csv",
+    "temp_dir": "./output/temp",
+    "metadata_file": "./output/metadata.json",
+    "checkpoint_dir": "./checkpoints"
+  },
+  
+  "tools": {
+    "microsoft_ti": {
+      "enabled": true,
+      "endpoint_domain": "https://prod.eur.ti.trafficmanager.net/api/dns/passive/subdomains/export?query={domain}",
+      "endpoint_count": "https://prod.eur.ti.trafficmanager.net/api/dns/passive/subdomains/count?query={domain}",
+      "request_interval": 10,
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "output_file": "./output/temp/microsoft_ti_subdomains.csv",
+      "timeout": 3600,
+      "priority": 1,
+      
+      "processes_input": [
+        {
+          "authorization": "Bearer YOUR_TOKEN_HERE",
+          "proxy": null
+        }
+      ]
+    },
+    
+    "securitytrails": {
+      "enabled": true,
+      "sec_id": "452071e4",
+      "endpoint_apex": "https://securitytrails.com/_next/data/{sec_id}/list/apex_domain/{domain}.json?page={page}&domain={domain}",
+      "endpoint_ip": "https://securitytrails.com/_next/data/{sec_id}/list/ip/{ip}.json?page={page}&ip={ip}",
+      "request_interval": 15,
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0",
+      "output_file": "./output/temp/securitytrails_subdomains.txt",
+      "timeout": 3600,
+      "priority": 1,
+      
+      "processes_input": [
+        {
+          "cookie": "YOUR_COOKIES_HERE",
+          "proxy": null
+        }
+      ]
+    },
+    
+    "crtsh": {
+      "enabled": true,
+      "timeout": 30,
+      "priority": 2,
+      "output_file": "./output/temp/crtsh_subdomains.json"
+    },
+    
+    "sublist3r": {
+      "enabled": true,
+      "threads": 40,
+      "engines": ["google", "bing", "yahoo", "baidu", "ask"],
+      "priority": 2,
+      "output_file": "./output/temp/sublist3r_subdomains.txt",
+      "enable_bruteforce": false
+    }
+  },
+  
+  "deduplication": {
+    "case_sensitive": false,
+    "remove_wildcards": false,
+    "flag_wildcards": true,
+    "confidence_threshold": "LOW"
+  },
+  
+  "execution": {
+    "parallel_tools": true,
+    "max_workers": 4,
+    "save_individual_outputs": true
+  }
+}

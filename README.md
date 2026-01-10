@@ -57,28 +57,27 @@ Automated passive subdomain enumeration integrating:
 ## 🚀 Quick Start
 
 ### 1. Clone Repository
-
 ```bash
-git clone https://github.com/YOUR_USERNAME/recon-suite.git
+git clone https://github.com/Niccolo10/recon-suite.git
 cd recon-suite/passive-recon
 ```
 
 ### 2. Install Dependencies
-
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 3. Configure
+```bash
+cp config.json.example config.json
+nano config.json  # Edit with your tokens
+```
 
-Edit `config.json` and add your auth tokens:
-
-#### Microsoft TI
+#### Microsoft TI Setup
 
 1. Login to security.microsoft.com (intercept with Burp)
 2. Copy the `Authorization: Bearer ...` header
 3. Update in config.json:
-
 ```json
 {
   "tools": {
@@ -94,13 +93,12 @@ Edit `config.json` and add your auth tokens:
 }
 ```
 
-#### SecurityTrails
+#### SecurityTrails Setup
 
 1. Login to securitytrails.com (intercept with Burp)
 2. Copy all cookies
-3. Update SEC_ID from URL path (e.g., `/_next/data/452071e4/...`)
+3. Get SEC_ID from URL path (e.g., `/_next/data/452071e4/...`)
 4. Update in config.json:
-
 ```json
 {
   "tools": {
@@ -108,7 +106,7 @@ Edit `config.json` and add your auth tokens:
       "sec_id": "452071e4",
       "processes_input": [
         {
-          "cookie": "cf_clearance=...; SecurityTrails=...",
+          "cookie": "YOUR_COOKIES_HERE",
           "proxy": null
         }
       ]
@@ -118,16 +116,17 @@ Edit `config.json` and add your auth tokens:
 ```
 
 ### 4. Add Target Domains
+```bash
+nano input/domains.txt
+```
 
-Edit `input/domains.txt`:
-
+Add your domains (one per line):
 ```
 example.com
 test-domain.com
 ```
 
 ### 5. Run
-
 ```bash
 python master_enum.py
 ```
@@ -137,7 +136,6 @@ python master_enum.py
 ## 📊 Output Format
 
 ### Main Output: `output/final_results.csv`
-
 ```csv
 subdomain,apex_domain,ip,source_tools,confidence_score,first_discovered,host_provider,mail_provider,tags,additional_info
 api.example.com,example.com,,microsoft_ti;securitytrails;crtsh,HIGH,2025-01-10T14:30:00,Amazon.com Inc,Google LLC,prod,{}
@@ -158,7 +156,6 @@ test.example.com,example.com,,securitytrails,MEDIUM,2025-01-10T14:32:00,Cloudfla
 - `additional_info` - JSON metadata
 
 ### Statistics: `output/metadata.json`
-
 ```json
 {
   "execution_time": "2025-01-10T15:00:00",
@@ -168,11 +165,6 @@ test.example.com,example.com,,securitytrails,MEDIUM,2025-01-10T14:32:00,Cloudfla
       "success": true,
       "subdomains_found": 5000,
       "elapsed_seconds": 45.2
-    },
-    "securitytrails": {
-      "success": true,
-      "subdomains_found": 169,
-      "elapsed_seconds": 120.5
     }
   },
   "total_subdomains_found": 5100
@@ -185,8 +177,7 @@ test.example.com,example.com,,securitytrails,MEDIUM,2025-01-10T14:32:00,Cloudfla
 
 ### Multiple Tokens/Cookies (Recommended)
 
-For better rate limit handling, use multiple auth tokens:
-
+For better rate limit handling:
 ```json
 {
   "tools": {
@@ -198,7 +189,7 @@ For better rate limit handling, use multiple auth tokens:
         },
         {
           "authorization": "Bearer TOKEN_2",
-          "proxy": {"http": "http://proxy2:8080", "https": "http://proxy2:8080"}
+          "proxy": null
         }
       ]
     }
@@ -206,10 +197,7 @@ For better rate limit handling, use multiple auth tokens:
 }
 ```
 
-The system will automatically rotate through tokens and distribute work.
-
 ### Disable Specific Tools
-
 ```json
 {
   "tools": {
@@ -223,7 +211,6 @@ The system will automatically rotate through tokens and distribute work.
 ### Sequential Execution
 
 For rate-limited scenarios:
-
 ```json
 {
   "execution": {
@@ -232,28 +219,14 @@ For rate-limited scenarios:
 }
 ```
 
-### Wildcard Handling
-
-```json
-{
-  "deduplication": {
-    "remove_wildcards": true,  // Remove *.example.com entries
-    "flag_wildcards": false    // Or just flag them
-  }
-}
-```
-
 ---
 
 ## 🔄 Resume Capability
 
-If execution is interrupted (Ctrl+C, token expiry, network issues):
+If execution is interrupted:
 
 1. Fix the issue (refresh tokens if needed)
-2. Re-run the same command:
-   ```bash
-   python master_enum.py
-   ```
+2. Re-run: `python master_enum.py`
 3. It will automatically resume from the last completed tool
 
 To start fresh:
@@ -279,40 +252,24 @@ python master_enum.py
 
 ### Rate Limits Hit
 
-**Symptoms:**
-- Multiple 403 errors
-- Cloudflare blocks
-
 **Solutions:**
 1. Add more tokens/cookies with different IPs
 2. Increase `request_interval` in config
 3. Use proxy rotation
 4. Run tools sequentially (`parallel_tools: false`)
 
-### Tool Fails But Others Continue
-
-This is expected behavior! Each tool runs independently. Check:
-- `output/temp/*_logs.txt` for errors
-- `output/metadata.json` for which tools succeeded
-
 ### Import Errors
-
 ```bash
-# Install missing dependencies
 pip install -r requirements.txt
-
-# If sublist3r fails
-pip install sublist3r --upgrade
 ```
 
 ---
 
 ## 📁 Directory Structure
-
 ```
 passive-recon/
 ├── master_enum.py           # Main orchestrator
-├── config.json              # Configuration
+├── config.json              # Configuration (create from .example)
 ├── requirements.txt         # Dependencies
 │
 ├── tools/                   # Enumeration tools
@@ -340,57 +297,27 @@ passive-recon/
 
 ---
 
-## 🔐 Security Notes
-
-- **Never commit `config.json` with real tokens** - Use `.gitignore`
-- Store tokens in environment variables for CI/CD
-- Rotate tokens regularly
-- Use separate tokens for different projects
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
----
-
-## 📝 License
-
-MIT License - See [LICENSE](LICENSE) file
-
----
-
 ## 🗺️ Roadmap
 
 ### Phase 2: Active Recon
 - [ ] WHOIS enrichment integration
-- [ ] Parallel port scanning (Nmap/Masscan)
+- [ ] Parallel port scanning
 - [ ] HTTP probing and screenshots
 - [ ] SSL certificate analysis
 
 ### Phase 3: Analysis
 - [ ] Asset classification (On-Prem vs Cloud)
-- [ ] Automated client reporting
+- [ ] Automated reporting
 - [ ] Risk scoring
 
 ### Phase 4: Integrations
 - [ ] BBot deep enumeration
 - [ ] Nuclei vulnerability scanning
 - [ ] FFUF fuzzing automation
-- [ ] Workflow orchestration
 
 ---
 
-## 📧 Support
+## 📝 License
 
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check existing documentation in `/docs`
-
+MIT License
 ---
-
-**Made with ❤️ for the infosec community**
