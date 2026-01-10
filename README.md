@@ -2,8 +2,6 @@
 
 **Phased reconnaissance framework for bug bounty hunting.**
 
-Built for hunters who want control, not just automation.
-
 ---
 
 ## Philosophy
