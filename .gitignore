@@ -25,6 +25,7 @@ config.json
 *token*
 *cookie*
 *_temp_config.json
+input/domains.txt
 
 # Keep structure
 !passive-recon/output/.gitkeep
