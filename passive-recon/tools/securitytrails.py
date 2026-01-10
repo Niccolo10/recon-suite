@@ -1,12 +1,11 @@
 """
-SecurityTrails - Native Implementation
-Preserves all reliability features from original script:
+SecurityTrails - Native Implementation with Progressive Saving
+Features:
 - Multiple cookies with rotation
+- Saves after each page (never lose progress)
 - Proxy support per cookie
-- Request delays
-- Pagination handling
+- Request delays and pagination
 - 403/Cloudflare error detection
-- IP vs Domain handling
 """
 
 import requests
@@ -33,8 +32,7 @@ from .base_tool import BaseTool
 
 class SecurityTrailsTool(BaseTool):
     """
-    Native SecurityTrails implementation
-    Directly queries the API without subprocess calls
+    Native SecurityTrails implementation with progressive saving
     """
     
     def __init__(self, config: Dict):
@@ -61,6 +59,8 @@ class SecurityTrailsTool(BaseTool):
         if not self.process_inputs:
             raise ValueError("securitytrails requires at least one cookie in 'processes_input'")
         
+        print(f"[{self.name}] Loaded {len(self.process_inputs)} cookie(s) for rotation")
+        
         # Request settings
         self.request_interval = config.get('request_interval', 15)
         self.user_agent = config.get(
@@ -70,6 +70,7 @@ class SecurityTrailsTool(BaseTool):
         
         # Output
         self.output_file = config.get('output_file', './output/temp/securitytrails_subdomains.txt')
+        self.progressive_save = config.get('progressive_save', True)
     
     def run(self, domains: List[str]) -> List[Tuple[str, Dict]]:
         """
@@ -82,6 +83,7 @@ class SecurityTrailsTool(BaseTool):
         manager = Manager()
         log_lock = manager.Lock()
         results_lock = manager.Lock()
+        file_lock = manager.Lock()
         
         # Shared results
         all_results = manager.list()
@@ -104,6 +106,7 @@ class SecurityTrailsTool(BaseTool):
                         process_input,
                         log_lock,
                         results_lock,
+                        file_lock,
                         all_results
                     )
                 )
@@ -117,8 +120,9 @@ class SecurityTrailsTool(BaseTool):
         # Convert to regular list
         results = list(all_results)
         
-        # Save output
-        self._save_output(results)
+        # Final save (if progressive save was disabled)
+        if not self.progressive_save:
+            self._save_output(results)
         
         return results
     
@@ -135,10 +139,24 @@ class SecurityTrailsTool(BaseTool):
                 cookies[key.strip()] = value.strip()
         return cookies
     
-    def _process_domain(self, domain_or_ip: str, process_input: Dict, log_lock, results_lock, all_results):
+    def _progressive_save(self, results: List[Tuple[str, Dict]], lock):
+        """Save results progressively after each page"""
+        with lock:
+            output_path = Path(self.output_file)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Append to file (or create if doesn't exist)
+            mode = 'a' if output_path.exists() else 'w'
+            with open(output_path, mode, encoding='utf-8') as f:
+                for subdomain, metadata in results:
+                    host_provider = metadata.get('host_provider', '')
+                    mail_provider = metadata.get('mail_provider', '')
+                    f.write(f'{subdomain};{host_provider};{mail_provider}\n')
+    
+    def _process_domain(self, domain_or_ip: str, process_input: Dict, log_lock, results_lock, file_lock, all_results):
         """
         Process a single domain/IP (runs in separate process)
-        Handles pagination like original script
+        Saves progressively after each page
         """
         cookie_str = process_input.get('cookie', '')
         proxy = process_input.get('proxy', None)
@@ -162,6 +180,7 @@ class SecurityTrailsTool(BaseTool):
         page = 1
         total_pages = 1
         count = 0
+        page_results = []
         
         while page <= total_pages:
             try:
@@ -186,6 +205,11 @@ class SecurityTrailsTool(BaseTool):
                         colored(f"[ERROR] {domain_or_ip} page {page}: status 403 (Cloudflare block)", "red"),
                         log_lock
                     )
+                    # Save what we have so far before breaking
+                    if page_results and self.progressive_save:
+                        self._progressive_save(page_results, file_lock)
+                        with results_lock:
+                            all_results.extend(page_results)
                     break
                 
                 if response.status_code != 200:
@@ -209,7 +233,8 @@ class SecurityTrailsTool(BaseTool):
                 if page == 1:
                     total_pages = int(body.get('meta', {}).get('total_pages', 1))
                 
-                # Process records
+                # Process records for this page
+                page_results = []
                 records = body.get('records', [])
                 for record in records:
                     hostname = record.get('hostname', '').strip().lower()
@@ -225,13 +250,17 @@ class SecurityTrailsTool(BaseTool):
                         'source': 'securitytrails'
                     }
                     
-                    with results_lock:
-                        all_results.append((hostname, metadata))
-                    
+                    page_results.append((hostname, metadata))
                     count += 1
                 
+                # Save this page's results immediately
+                if page_results and self.progressive_save:
+                    self._progressive_save(page_results, file_lock)
+                    with results_lock:
+                        all_results.extend(page_results)
+                
                 self._safe_log(
-                    colored(f"[OK] {domain_or_ip} page {page} ({count} records total)", "green"),
+                    colored(f"[OK] {domain_or_ip} page {page}/{total_pages} ({count} records total)", "green"),
                     log_lock
                 )
                 
@@ -246,6 +275,11 @@ class SecurityTrailsTool(BaseTool):
                     colored(f"[TIMEOUT] {domain_or_ip} page {page}", "red"),
                     log_lock
                 )
+                # Save what we have before breaking
+                if page_results and self.progressive_save:
+                    self._progressive_save(page_results, file_lock)
+                    with results_lock:
+                        all_results.extend(page_results)
                 break
             except Exception as e:
                 self._safe_log(
@@ -263,7 +297,7 @@ class SecurityTrailsTool(BaseTool):
             print(message)
     
     def _save_output(self, results: List[Tuple[str, Dict]]):
-        """Save results to semicolon-separated file"""
+        """Save final results to file (used when progressive save is disabled)"""
         output_path = Path(self.output_file)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
