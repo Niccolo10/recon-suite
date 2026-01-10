@@ -1,323 +1,344 @@
 # Recon Suite
 
-**Professional reconnaissance automation toolkit for external penetration testing.**
+**Phased reconnaissance framework for bug bounty hunting.**
+
+Built for hunters who want control, not just automation.
 
 ---
 
-## 🎯 Overview
+## Philosophy
 
-Recon Suite is a modular reconnaissance framework designed for penetration testers and bug bounty hunters. It automates the tedious parts of external reconnaissance while maintaining reliability and extensibility.
-
-### Current Modules
-
-| Module | Status | Description |
-|--------|--------|-------------|
-| **Passive Recon** | ✅ **Production** | Multi-tool subdomain enumeration |
-| **Active Recon** | 📋 Planned | WHOIS, port scanning, web probing |
-| **Analysis** | 📋 Planned | Asset classification, reporting |
-| **Integrations** | 📋 Planned | BBot, Nuclei, FFUF |
+- **Phased, not monolithic** - Each phase produces files that feed the next. You control when to proceed.
+- **Scope is sacred** - Every phase enforces scope. Out-of-scope assets are filtered or flagged.
+- **Analysis over enumeration** - Finding 50,000 subdomains means nothing. Understanding 500 interesting ones means everything.
+- **Custom where it matters** - Wrap battle-tested tools for commodity tasks. Build custom for analytical tasks.
 
 ---
 
-## 📦 Passive Recon Module
+## Architecture
 
-Automated passive subdomain enumeration integrating:
+```
+Phase 1: Passive Subdomain Enumeration    ✅ DONE
+         Output: subdomains.csv
+              ↓
+Phase 2: Resolution & Filtering           ✅ DONE
+         Input: subdomains.csv
+         Output: live_hosts.csv, dead_hosts.csv, ip_groups.csv
+              ↓
+Phase 3: Content Discovery                🔄 PLANNED
+         Input: live_hosts.csv
+         Output: js_findings.csv, wayback_findings.csv, endpoints.csv
+              ↓
+Phase 4: Analysis                         🔄 PLANNED
+         Input: live_hosts.csv + endpoints.csv
+         Output: reflection_map.csv, error_analysis.csv, auth_flows.csv
+              ↓
+Phase 5: Vulnerability Checks             🔄 PLANNED
+         Input: dead_hosts.csv + live_hosts.csv
+         Output: takeover_results.csv, misconfig_results.csv
+```
 
-- **Microsoft Threat Intelligence** - Large-scale subdomain discovery
-- **SecurityTrails** - Historical DNS data
-- **crt.sh** - Certificate Transparency logs
-- **Sublist3r** - Search engine aggregation
+---
 
-### Key Features
+## Quick Start
 
-✅ **Production-Grade Reliability**
-- Multi-token/cookie support with rotation
-- Automatic retry and error handling
+### 1. Setup Project
+
+```bash
+# Clone repository
+git clone <repo-url>
+cd recon-suite
+
+# Create project directory for your target
+mkdir -p projects/target-corp
+cd projects/target-corp
+
+# Copy configuration templates
+cp ../../scope.json.example scope.json
+cp ../../config.json.example config.json
+
+# Edit scope.json with your target's scope
+# Edit config.json if you need custom settings
+```
+
+### 2. Define Scope
+
+Edit `scope.json`:
+
+```json
+{
+  "name": "Target Corp Bug Bounty",
+  "in_scope": [
+    "*.target.com",
+    "*.target.io"
+  ],
+  "out_of_scope": [
+    "support.target.com",
+    "status.target.com"
+  ]
+}
+```
+
+### 3. Run Phase 1: Passive Enumeration
+
+```bash
+# Create input domains file
+mkdir -p input
+echo "target.com" > input/domains.txt
+echo "target.io" >> input/domains.txt
+
+# Copy Phase 1 config
+cp ../../passive-recon/config.json.example passive-recon-config.json
+# Edit with your API tokens
+
+# Run Phase 1
+python ../../passive-recon/master_enum.py passive-recon-config.json
+```
+
+### 4. Run Phase 2: Resolution
+
+```bash
+# Run Phase 2 on Phase 1 results
+python ../../resolution/resolver_main.py \
+    --input output/final_results.csv \
+    --scope scope.json \
+    --output-dir phase2-resolution
+```
+
+### 5. Review Results
+
+```
+phase2-resolution/
+├── live_hosts.csv      # Your main targets - hosts that responded
+├── dead_hosts.csv      # Takeover candidates - didn't respond
+├── ip_groups.csv       # Subdomains sharing same IP
+└── metadata.json       # Statistics
+```
+
+---
+
+## Phase Details
+
+### Phase 1: Passive Subdomain Enumeration ✅
+
+**Tools integrated:**
+- Microsoft Threat Intelligence (native API)
+- SecurityTrails (native API)  
+- crt.sh (Certificate Transparency)
+- Sublist3r (Search engine aggregation)
+
+**Key features:**
+- Multi-token/cookie rotation
+- Smart deduplication with confidence scoring
 - Checkpoint/resume capability
-- Rate limit management
 
-✅ **Smart Deduplication**
-- Cross-tool result merging
-- Source tracking (which tools found what)
-- Confidence scoring (HIGH/MEDIUM/LOW)
-- Wildcard detection and flagging
+**Output:** `subdomains.csv` with source tracking and confidence scores
 
-✅ **Parallel Execution**
-- Runs all tools simultaneously
-- Independent failure isolation
-- Progress checkpointing after each tool
-
-✅ **Unified Output**
-- Single CSV with all results
-- Metadata preservation from all sources
-- Ready for active enumeration phase
+See [passive-recon/README.md](passive-recon/README.md) for detailed setup.
 
 ---
 
-## 🚀 Quick Start
+### Phase 2: Resolution & Filtering ✅
 
-### 1. Clone Repository
+**Purpose:** Filter passive results to live hosts, remove noise.
+
+**Components:**
+- **httpx wrapper** - Probes all subdomains, captures response metadata
+- **IP grouper** - Groups subdomains by resolved IP (shared infrastructure detection)
+- **Scope filter** - Enforces in-scope/out-of-scope rules
+
+**Usage:**
+
 ```bash
-git clone https://github.com/Niccolo10/recon-suite.git
-cd recon-suite/passive-recon
+python resolution/resolver_main.py \
+    --input phase1-passive/subdomains.csv \
+    --scope scope.json \
+    --output-dir phase2-resolution \
+    --config config.json  # optional
 ```
 
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
+**Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-i, --input` | Phase 1 CSV file (required) |
+| `-s, --scope` | scope.json file (required) |
+| `-o, --output-dir` | Output directory (default: ./phase2-resolution) |
+| `-c, --config` | config.json for httpx settings |
+| `--subdomain-column` | CSV column name (default: subdomain) |
+| `--skip-scope-filter` | Process all subdomains regardless of scope |
+
+**Output files:**
+
+| File | Description |
+|------|-------------|
+| `live_hosts.csv` | Responding hosts with metadata (status, title, IP, etc.) |
+| `dead_hosts.csv` | Non-responding hosts (subdomain takeover candidates) |
+| `ip_groups.csv` | Subdomains grouped by IP address |
+| `out_of_scope.txt` | Filtered out-of-scope subdomains (for reference) |
+| `metadata.json` | Execution statistics |
+
+**live_hosts.csv columns:**
+
 ```
-
-### 3. Configure
-```bash
-cp config.json.example config.json
-nano config.json  # Edit with your tokens
-```
-
-#### Microsoft TI Setup
-
-1. Login to security.microsoft.com (intercept with Burp)
-2. Copy the `Authorization: Bearer ...` header
-3. Update in config.json:
-```json
-{
-  "tools": {
-    "microsoft_ti": {
-      "processes_input": [
-        {
-          "authorization": "Bearer YOUR_TOKEN_HERE",
-          "proxy": null
-        }
-      ]
-    }
-  }
-}
-```
-
-#### SecurityTrails Setup
-
-1. Login to securitytrails.com (intercept with Burp)
-2. Copy all cookies
-3. Get SEC_ID from URL path (e.g., `/_next/data/452071e4/...`)
-4. Update in config.json:
-```json
-{
-  "tools": {
-    "securitytrails": {
-      "sec_id": "452071e4",
-      "processes_input": [
-        {
-          "cookie": "YOUR_COOKIES_HERE",
-          "proxy": null
-        }
-      ]
-    }
-  }
-}
-```
-
-### 4. Add Target Domains
-```bash
-nano input/domains.txt
-```
-
-Add your domains (one per line):
-```
-example.com
-test-domain.com
-```
-
-### 5. Run
-```bash
-python master_enum.py
+subdomain, url, ip, port, status_code, title, content_length, 
+web_server, redirect_url, response_time_ms, cname, cdn, scheme
 ```
 
 ---
 
-## 📊 Output Format
+### Phase 3: Content Discovery 🔄 PLANNED
 
-### Main Output: `output/final_results.csv`
-```csv
-subdomain,apex_domain,ip,source_tools,confidence_score,first_discovered,host_provider,mail_provider,tags,additional_info
-api.example.com,example.com,,microsoft_ti;securitytrails;crtsh,HIGH,2025-01-10T14:30:00,Amazon.com Inc,Google LLC,prod,{}
-test.example.com,example.com,,securitytrails,MEDIUM,2025-01-10T14:32:00,Cloudflare Inc,,,{}
-*.example.com,example.com,,crtsh,LOW,2025-01-10T14:35:00,,,,"{\"wildcard\":true}"
+**Components:**
+- **JavaScript Analyzer** - Extract endpoints, secrets, interesting strings from JS files
+- **Wayback Finder** - Discover historical endpoints that might still exist
+- **Endpoint Aggregator** - Merge and deduplicate all discovered endpoints
+
+---
+
+### Phase 4: Analysis 🔄 PLANNED
+
+**Components (the edge):**
+- **Parameter Reflection Mapper** - Find where input reflects and how it's encoded
+- **Error Response Analyzer** - Trigger errors to find info leaks, stack traces
+- **Auth Flow Mapper** - Map authentication mechanisms and potential weaknesses
+- **Pattern Predictor** - Predict undiscovered subdomains from naming patterns
+
+---
+
+### Phase 5: Vulnerability Checks 🔄 PLANNED
+
+**Components:**
+- **Subdomain Takeover** - Check dead hosts for claimable services
+- **Misconfiguration Checks** - CORS, exposed .git, debug endpoints, etc.
+
+---
+
+## Directory Structure
+
 ```
-
-**Columns:**
-- `subdomain` - Discovered subdomain
-- `apex_domain` - Parent domain from input
-- `ip` - Empty (filled by active recon)
-- `source_tools` - Which tools found it (semicolon-separated)
-- `confidence_score` - HIGH (3+ tools), MEDIUM (2), LOW (1)
-- `first_discovered` - Timestamp
-- `host_provider` - From SecurityTrails
-- `mail_provider` - From SecurityTrails
-- `tags` - From Microsoft TI
-- `additional_info` - JSON metadata
-
-### Statistics: `output/metadata.json`
-```json
-{
-  "execution_time": "2025-01-10T15:00:00",
-  "input_domains": ["example.com"],
-  "tool_statistics": {
-    "microsoft_ti": {
-      "success": true,
-      "subdomains_found": 5000,
-      "elapsed_seconds": 45.2
-    }
-  },
-  "total_subdomains_found": 5100
-}
+recon-suite/
+├── README.md                   # This file
+├── scope.json.example          # Scope template
+├── config.json.example         # Configuration template
+│
+├── core/                       # Shared modules
+│   ├── scope.py               # Scope validation
+│   └── config.py              # Configuration management
+│
+├── passive-recon/              # Phase 1
+│   ├── master_enum.py
+│   ├── tools/
+│   └── utils/
+│
+├── resolution/                 # Phase 2
+│   ├── resolver_main.py       # Main orchestrator
+│   ├── httpx_runner.py        # httpx wrapper
+│   └── ip_grouper.py          # IP grouping
+│
+├── discovery/                  # Phase 3 (planned)
+├── analysis/                   # Phase 4 (planned)
+├── vulnchecks/                 # Phase 5 (planned)
+│
+└── projects/                   # Your engagement data
+    └── target-corp/
+        ├── scope.json
+        ├── config.json
+        ├── phase1-passive/
+        ├── phase2-resolution/
+        └── ...
 ```
 
 ---
 
-## ⚙️ Advanced Configuration
+## Configuration
 
-### Multiple Tokens/Cookies (Recommended)
+### scope.json
 
-For better rate limit handling:
 ```json
 {
-  "tools": {
-    "microsoft_ti": {
-      "processes_input": [
-        {
-          "authorization": "Bearer TOKEN_1",
-          "proxy": {"http": "http://proxy1:8080", "https": "http://proxy1:8080"}
-        },
-        {
-          "authorization": "Bearer TOKEN_2",
-          "proxy": null
-        }
-      ]
-    }
-  }
+  "name": "Program Name",
+  "in_scope": [
+    "*.target.com",
+    "specific.other.com"
+  ],
+  "out_of_scope": [
+    "support.target.com",
+    "*.cdn.target.com"
+  ]
 }
 ```
 
-### Disable Specific Tools
+**Pattern support:**
+- `*.target.com` - All subdomains of target.com
+- `target.com` - Exact match
+- `specific.other.com` - Exact match
+
+### config.json
+
+See `config.json.example` for all options. Key settings:
+
 ```json
 {
-  "tools": {
-    "sublist3r": {
-      "enabled": false
+  "phase2": {
+    "httpx": {
+      "threads": 50,
+      "timeout": 10,
+      "ports": [80, 443, 8080, 8443],
+      "rate_limit": 150
     }
-  }
-}
-```
-
-### Sequential Execution
-
-For rate-limited scenarios:
-```json
-{
-  "execution": {
-    "parallel_tools": false
   }
 }
 ```
 
 ---
 
-## 🔄 Resume Capability
+## Requirements
 
-If execution is interrupted:
+**External tools:**
+- httpx: https://github.com/projectdiscovery/httpx/releases
 
-1. Fix the issue (refresh tokens if needed)
-2. Re-run: `python master_enum.py`
-3. It will automatically resume from the last completed tool
-
-To start fresh:
-```bash
-rm checkpoints/state.json
-python master_enum.py
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Token/Cookie Expired
-
-**Symptoms:**
-- `[AUTH] domain: Invalid or expired token`
-- `[ERROR] status 403`
-
-**Solution:**
-1. Grab fresh tokens from Burp
-2. Update `config.json`
-3. Re-run (will resume from checkpoint)
-
-### Rate Limits Hit
-
-**Solutions:**
-1. Add more tokens/cookies with different IPs
-2. Increase `request_interval` in config
-3. Use proxy rotation
-4. Run tools sequentially (`parallel_tools: false`)
-
-### Import Errors
+**Python packages:**
 ```bash
 pip install -r requirements.txt
 ```
 
 ---
 
-## 📁 Directory Structure
+## Workflow Example
+
+```bash
+# 1. Setup
+mkdir -p projects/acme-corp && cd projects/acme-corp
+cp ../../scope.json.example scope.json
+# Edit scope.json
+
+# 2. Phase 1: Passive enumeration
+echo "acme.com" > input/domains.txt
+python ../../passive-recon/master_enum.py
+
+# 3. Review Phase 1 results
+cat output/final_results.csv | head -20
+
+# 4. Phase 2: Resolution
+python ../../resolution/resolver_main.py \
+    -i output/final_results.csv \
+    -s scope.json
+
+# 5. Review Phase 2 results
+cat phase2-resolution/live_hosts.csv | head -20
+cat phase2-resolution/ip_groups.csv
+
+# 6. Identify interesting targets
+# - Hosts with 401/403 (something protected)
+# - Unique IPs (standalone services)
+# - Multiple hosts on same IP (test once)
+
+# 7. Continue to Phase 3...
 ```
-passive-recon/
-├── master_enum.py           # Main orchestrator
-├── config.json              # Configuration (create from .example)
-├── requirements.txt         # Dependencies
-│
-├── tools/                   # Enumeration tools
-│   ├── microsoft_ti.py     # Native MS TI implementation
-│   ├── securitytrails.py   # Native SecurityTrails implementation
-│   ├── crtsh_tool.py       # crt.sh integration
-│   └── sublist3r_tool.py   # Sublist3r integration
-│
-├── utils/                   # Utilities
-│   ├── validator.py        # Domain validation
-│   ├── deduplicator.py     # Smart deduplication
-│   └── merger.py           # Results merger
-│
-├── input/
-│   └── domains.txt         # Your target domains
-│
-├── output/
-│   ├── final_results.csv   # ⭐ Main output
-│   ├── metadata.json       # Statistics
-│   └── temp/               # Individual tool outputs
-│
-└── checkpoints/
-    └── state.json          # Resume state
-```
 
 ---
 
-## 🗺️ Roadmap
+## License
 
-### Phase 2: Active Recon
-- [ ] WHOIS enrichment integration
-- [ ] Parallel port scanning
-- [ ] HTTP probing and screenshots
-- [ ] SSL certificate analysis
-
-### Phase 3: Analysis
-- [ ] Asset classification (On-Prem vs Cloud)
-- [ ] Automated reporting
-- [ ] Risk scoring
-
-### Phase 4: Integrations
-- [ ] BBot deep enumeration
-- [ ] Nuclei vulnerability scanning
-- [ ] FFUF fuzzing automation
-
----
-
-## 📝 License
-
-MIT License
----
+MIT

@@ -1,0 +1,15 @@
+{
+  "name": "Example Bug Bounty Program",
+  "in_scope": [
+    "*.example.com",
+    "*.example.io",
+    "specific-app.otherdomain.com"
+  ],
+  "out_of_scope": [
+    "support.example.com",
+    "status.example.com",
+    "blog.example.com",
+    "*.cdn.example.com"
+  ],
+  "notes": "Wildcard scope on example.com and example.io. Only specific-app subdomain on otherdomain.com is in scope."
+}

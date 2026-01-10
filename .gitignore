@@ -11,33 +11,37 @@ build/
 dist/
 *.egg-info/
 
-# Output files
+# Project outputs - don't commit engagement data
+phase2-resolution
+
+# Config files with secrets
+config.json
+scope.json
+!*.example
+
+# Passive recon outputs (if running from root)
 passive-recon/output/
 passive-recon/checkpoints/
-*.csv
-*.json
-!passive-recon/config.json.example
-!**/requirements.txt
-
-# Input files - protect target domains
+passive-recon/input/domains.txt
+passive-recon/config.json
 passive-recon/input/domains.txt
 
-# Sensitive data
-config.json
-*bearer*
-*token*
-*cookie*
-*_temp_config.json
-
-# Keep structure
-!passive-recon/output/.gitkeep
-!passive-recon/checkpoints/.gitkeep
+# Keep structure files
+!**/.gitkeep
 
 # IDE
 .vscode/
 .idea/
 *.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+*.temp

@@ -1,0 +1,57 @@
+{
+  "phase2": {
+    "httpx": {
+      "threads": 50,
+      "timeout": 10,
+      "retries": 2,
+      "follow_redirects": true,
+      "ports": [80, 443, 8080, 8443],
+      "rate_limit": 150,
+      "httpx_path": "httpx"
+    },
+    "output_dir": "./phase2-resolution"
+  },
+  
+  "phase3": {
+    "js_analyzer": {
+      "timeout": 30,
+      "max_file_size_mb": 10,
+      "extract_secrets": false,
+      "ignore_external_js": true
+    },
+    "wayback": {
+      "rate_limit": 2,
+      "timeout": 30,
+      "interesting_patterns": [
+        "/admin", "/debug", "/test", "/api/v1",
+        ".bak", ".sql", ".zip", ".config"
+      ]
+    },
+    "output_dir": "./phase3-discovery"
+  },
+  
+  "phase4": {
+    "reflection": {
+      "timeout": 10,
+      "canary_prefix": "RFLCT",
+      "test_locations": ["url_param", "body", "header"]
+    },
+    "error_analysis": {
+      "timeout": 10,
+      "triggers": ["type_mismatch", "missing_param", "malformed_json"]
+    },
+    "output_dir": "./phase4-analysis"
+  },
+  
+  "phase5": {
+    "takeover": {
+      "timeout": 10,
+      "verify_vulnerability": true,
+      "check_cname": true
+    },
+    "misconfig": {
+      "checks": ["cors", "git_exposed", "debug_endpoints", "graphql_introspection"]
+    },
+    "output_dir": "./phase5-vulns"
+  }
+}
