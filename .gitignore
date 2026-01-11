@@ -1,39 +1,23 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
 .Python
-env/
 venv/
-ENV/
-build/
-dist/
-*.egg-info/
+env/
 
-# Project outputs - don't commit engagement data
-phase2-resolution
+# Project data (keep structure, not data)
+projects/*
+!projects/example/
 
-# Config files with secrets
+# Config with secrets (keep example)
 config.json
-scope.json
-!*.example
-
-# Passive recon outputs (if running from root)
-passive-recon/output/
-passive-recon/checkpoints/
-passive-recon/input/domains.txt
-passive-recon/config.json
-passive-recon/input/domains.txt
-
-# Keep structure files
-!**/.gitkeep
+!config.json.example
 
 # IDE
 .vscode/
 .idea/
 *.swp
-*.swo
 
 # OS
 .DS_Store
@@ -41,7 +25,3 @@ Thumbs.db
 
 # Logs
 *.log
-
-# Temp files
-*.tmp
-*.temp

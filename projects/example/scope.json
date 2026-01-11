@@ -1,0 +1,10 @@
+{
+  "name": "Example Bug Bounty",
+  "in_scope": [
+    "*.example.com"
+  ],
+  "out_of_scope": [
+    "support.example.com",
+    "status.example.com"
+  ]
+}

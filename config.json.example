@@ -1,57 +1,83 @@
 {
-  "phase2": {
-    "httpx": {
-      "threads": 50,
-      "timeout": 10,
-      "retries": 2,
-      "follow_redirects": true,
-      "ports": [80, 443, 8080, 8443],
-      "rate_limit": 150,
-      "httpx_path": "httpx"
-    },
-    "output_dir": "./phase2-resolution"
+  "tools": {
+    "httpx_path": "httpx",
+    "threads": 50,
+    "timeout": 10,
+    "retries": 2,
+    "ports": [80, 443, 8080, 8443],
+    "rate_limit": 150
   },
   
-  "phase3": {
+  "passive": {
+    "microsoft_ti": {
+      "enabled": false,
+      "endpoint_domain": "https://prod.eur.ti.trafficmanager.net/api/dns/passive/subdomains/export?query={domain}",
+      "endpoint_count": "https://prod.eur.ti.trafficmanager.net/api/dns/passive/subdomains/count?query={domain}",
+      "request_interval": 10,
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "timeout": 3600,
+      "processes_input": [
+        {
+          "authorization": "Bearer YOUR_TOKEN_HERE",
+          "proxy": null
+        }
+      ]
+    },
+    
+    "securitytrails": {
+      "enabled": false,
+      "sec_id": "YOUR_SEC_ID_HERE",
+      "endpoint_apex": "https://securitytrails.com/_next/data/{sec_id}/list/apex_domain/{domain}.json?page={page}&domain={domain}",
+      "request_interval": 15,
+      "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0",
+      "timeout": 3600,
+      "processes_input": [
+        {
+          "cookie": "YOUR_COOKIES_HERE",
+          "proxy": null
+        }
+      ]
+    },
+    
+    "crtsh": {
+      "enabled": true,
+      "timeout": 30
+    },
+    
+    "sublist3r": {
+      "enabled": true,
+      "threads": 40,
+      "engines": null
+    }
+  },
+  
+  "discovery": {
     "js_analyzer": {
       "timeout": 30,
-      "max_file_size_mb": 10,
-      "extract_secrets": false,
-      "ignore_external_js": true
+      "max_file_size_mb": 10
     },
     "wayback": {
       "rate_limit": 2,
-      "timeout": 30,
-      "interesting_patterns": [
-        "/admin", "/debug", "/test", "/api/v1",
-        ".bak", ".sql", ".zip", ".config"
-      ]
-    },
-    "output_dir": "./phase3-discovery"
+      "timeout": 30
+    }
   },
   
-  "phase4": {
+  "analysis": {
     "reflection": {
-      "timeout": 10,
-      "canary_prefix": "RFLCT",
-      "test_locations": ["url_param", "body", "header"]
+      "timeout": 10
     },
-    "error_analysis": {
-      "timeout": 10,
-      "triggers": ["type_mismatch", "missing_param", "malformed_json"]
-    },
-    "output_dir": "./phase4-analysis"
+    "errors": {
+      "timeout": 10
+    }
   },
   
-  "phase5": {
+  "vulns": {
     "takeover": {
       "timeout": 10,
-      "verify_vulnerability": true,
-      "check_cname": true
+      "verify": true
     },
     "misconfig": {
-      "checks": ["cors", "git_exposed", "debug_endpoints", "graphql_introspection"]
-    },
-    "output_dir": "./phase5-vulns"
+      "checks": ["cors", "git", "debug_endpoints"]
+    }
   }
 }

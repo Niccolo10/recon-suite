@@ -1,17 +1,10 @@
-# Core dependencies
+# Core
 requests>=2.31.0
-
-# Phase 1: Passive Recon
-sublist3r>=1.0
-termcolor>=2.3.0
 urllib3>=2.0.0
 
-# Phase 3: Discovery (future)
+# Passive enumeration
+sublist3r>=1.0
+termcolor>=2.3.0
+
+# Future phases
 # beautifulsoup4>=4.12.0
-# lxml>=5.0.0
-
-# Phase 4: Analysis (future)
-# No additional dependencies planned
-
-# Development
-# pytest>=7.0.0

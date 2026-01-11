@@ -1,4 +1,0 @@
-requests>=2.31.0
-sublist3r>=1.0
-termcolor>=2.3.0
-urllib3>=2.0.0
