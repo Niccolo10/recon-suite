@@ -2,6 +2,7 @@
 
 **Phased reconnaissance framework for bug bounty hunting.**
 
+
 ---
 
 ## Architecture

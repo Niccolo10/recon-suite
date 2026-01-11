@@ -120,27 +120,30 @@ class IPGrouper:
         single_host_ips = sum(1 for hosts in self.ip_groups.values() if len(hosts) == 1)
         multi_host_ips = total_ips - single_host_ips
         
-        # Top 5 most populated IPs
-        top_ips = sorted(
-            self.ip_groups.items(),
-            key=lambda x: len(x[1]),
-            reverse=True
-        )[:5]
-        
         print(f"\n[IP-GROUP] Summary:")
         print(f"  Total unique IPs: {total_ips}")
         print(f"  Total hosts mapped: {total_hosts}")
         print(f"  IPs with single host: {single_host_ips}")
         print(f"  IPs with multiple hosts: {multi_host_ips}")
         
-        if top_ips:
-            print(f"\n[IP-GROUP] Top IPs by subdomain count:")
-            for ip, hosts in top_ips:
-                sample = [h['subdomain'] for h in hosts[:3]]
-                sample_str = ', '.join(sample)
+        # Only show top IPs if there's actual grouping (multiple hosts per IP)
+        if multi_host_ips > 0:
+            # Get IPs with multiple hosts
+            multi_host_groups = [
+                (ip, hosts) for ip, hosts in self.ip_groups.items() 
+                if len(hosts) > 1
+            ]
+            multi_host_groups.sort(key=lambda x: len(x[1]), reverse=True)
+            
+            print(f"\n[IP-GROUP] Shared infrastructure detected:")
+            for ip, hosts in multi_host_groups[:10]:
+                subdomains = [h['subdomain'] for h in hosts]
+                sample = ', '.join(subdomains[:3])
                 if len(hosts) > 3:
-                    sample_str += f"... (+{len(hosts)-3} more)"
-                print(f"    {ip}: {len(hosts)} hosts ({sample_str})")
+                    sample += f"... (+{len(hosts)-3} more)"
+                print(f"    {ip}: {len(hosts)} hosts ({sample})")
+        else:
+            print(f"\n[IP-GROUP] No shared infrastructure detected (each subdomain has unique IP)")
     
     def get_groups(self) -> Dict[str, List[Dict]]:
         """Get IP groups dictionary"""
