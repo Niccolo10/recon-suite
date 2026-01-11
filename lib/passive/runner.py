@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .crtsh import CrtshTool
 from .sublist3r_tool import Sublist3rTool
@@ -63,24 +64,59 @@ def run_passive(project: Dict) -> Dict:
             tools.append(('securitytrails', SecurityTrailsTool(st_config)))
         except ValueError as e:
             print(f"[PASSIVE] SecurityTrails: {e}")
-    
+
+    # Google Dork (if configured with API keys)
+    gd_config = passive_config.get('google_dork', {})
+    if gd_config.get('enabled', False) and gd_config.get('api_keys') and gd_config.get('cx'):
+        try:
+            from .google_dork import GoogleDorkTool
+            tools.append(('google_dork', GoogleDorkTool(gd_config)))
+        except ValueError as e:
+            print(f"[PASSIVE] Google Dork: {e}")
+
     if not tools:
         return {'success': False, 'error': 'No tools enabled'}
     
     print(f"[PASSIVE] Tools: {', '.join(name for name, _ in tools)}")
-    
+
+    # Check if parallel execution is enabled
+    parallel_enabled = passive_config.get('parallel_tools', False)
+
     # Run each tool
     all_results = {}
-    
-    for tool_name, tool in tools:
-        print(f"\n[PASSIVE] Running {tool_name}...")
-        try:
-            results = tool.run(domains)
-            all_results[tool_name] = results
-            print(f"[PASSIVE] {tool_name}: {len(results)} subdomains")
-        except Exception as e:
-            print(f"[PASSIVE] {tool_name} failed: {str(e)}")
-            all_results[tool_name] = []
+
+    if parallel_enabled and len(tools) > 1:
+        print(f"[PASSIVE] Running {len(tools)} tools in PARALLEL...")
+
+        def run_tool(tool_tuple):
+            tool_name, tool = tool_tuple
+            try:
+                results = tool.run(domains)
+                return tool_name, results, None
+            except Exception as e:
+                return tool_name, [], str(e)
+
+        with ThreadPoolExecutor(max_workers=len(tools)) as executor:
+            futures = {executor.submit(run_tool, t): t[0] for t in tools}
+            for future in as_completed(futures):
+                tool_name, results, error = future.result()
+                if error:
+                    print(f"[PASSIVE] {tool_name} failed: {error}")
+                else:
+                    print(f"[PASSIVE] {tool_name}: {len(results)} subdomains")
+                all_results[tool_name] = results
+    else:
+        if len(tools) > 1:
+            print(f"[PASSIVE] Running tools sequentially (set parallel_tools: true in config for parallel)")
+        for tool_name, tool in tools:
+            print(f"\n[PASSIVE] Running {tool_name}...")
+            try:
+                results = tool.run(domains)
+                all_results[tool_name] = results
+                print(f"[PASSIVE] {tool_name}: {len(results)} subdomains")
+            except Exception as e:
+                print(f"[PASSIVE] {tool_name} failed: {str(e)}")
+                all_results[tool_name] = []
     
     # Deduplicate
     print(f"\n[PASSIVE] Deduplicating...")

@@ -48,6 +48,26 @@
       "enabled": true,
       "threads": 40,
       "engines": null
+    },
+
+    "google_dork": {
+      "enabled": false,
+      "api_keys": ["YOUR_GOOGLE_API_KEY"],
+      "cx": "YOUR_CUSTOM_SEARCH_ENGINE_ID",
+      "dorks": [
+        "ext:log",
+        "ext:env",
+        "ext:sql",
+        "ext:bak",
+        "ext:conf",
+        "ext:config",
+        "inurl:admin",
+        "inurl:api",
+        "intitle:index.of"
+      ],
+      "results_per_query": 10,
+      "request_interval": 2,
+      "timeout": 30
     }
   },
   
@@ -73,8 +93,12 @@
   
   "vulns": {
     "takeover": {
+      "nuclei_path": "nuclei",
+      "subzy_path": "subzy",
+      "threads": 25,
       "timeout": 10,
-      "verify": true
+      "use_nuclei": true,
+      "use_subzy": true
     },
     "misconfig": {
       "checks": ["cors", "git", "debug_endpoints"]

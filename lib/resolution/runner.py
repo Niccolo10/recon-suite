@@ -7,12 +7,32 @@ Includes deduplication and IP grouping.
 import subprocess
 import json
 import csv
+import sys
 import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
 from ..core.scope import ScopeValidator
+
+
+def print_progress_bar(current, total, prefix='Progress', suffix='Complete', length=40):
+    """Print a progress bar to the console"""
+    if total == 0:
+        return
+    percent = (current / total) * 100
+    filled = int(length * current // total)
+    bar = '█' * filled + '░' * (length - filled)
+    sys.stdout.write(f'\r{prefix} |{bar}| {percent:>5.1f}% ({current}/{total}) {suffix}')
+    sys.stdout.flush()
+
+
+def print_scanning_status(live_count, prefix='[RESOLVE] httpx'):
+    """Print scanning status showing live hosts found"""
+    spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+    spinner = spinner_chars[live_count % len(spinner_chars)]
+    sys.stdout.write(f'\r{prefix} {spinner} scanning... live:{live_count}    ')
+    sys.stdout.flush()
 
 
 def run_resolution(project: Dict) -> Dict:
@@ -109,14 +129,14 @@ def save_list(items: List[str], output_file: Path):
 
 
 def run_httpx(subdomains: List[str], config: Dict) -> Tuple[List[Dict], List[Dict]]:
-    """Run httpx and parse results with deduplication"""
+    """Run httpx and parse results with deduplication and progress tracking"""
     httpx_path = config.get('httpx_path', 'httpx')
     threads = config.get('threads', 50)
     timeout = config.get('timeout', 10)
     retries = config.get('retries', 2)
     ports = config.get('ports', [80, 443, 8080, 8443])
     rate_limit = config.get('rate_limit', 150)
-    
+
     # Verify httpx
     try:
         subprocess.run([httpx_path, '-version'], capture_output=True, timeout=10)
@@ -124,16 +144,16 @@ def run_httpx(subdomains: List[str], config: Dict) -> Tuple[List[Dict], List[Dic
         raise RuntimeError(
             f"httpx not found. Install from: https://github.com/projectdiscovery/httpx/releases"
         )
-    
+
     # Temp files
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as f:
         for subdomain in subdomains:
             f.write(f"{subdomain}\n")
         input_file = f.name
-    
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
         output_file = f.name
-    
+
     try:
         cmd = [
             httpx_path,
@@ -144,7 +164,6 @@ def run_httpx(subdomains: List[str], config: Dict) -> Tuple[List[Dict], List[Dic
             '-timeout', str(timeout),
             '-retries', str(retries),
             '-rate-limit', str(rate_limit),
-            '-silent',
             '-no-color',
             '-status-code',
             '-title',
@@ -158,18 +177,56 @@ def run_httpx(subdomains: List[str], config: Dict) -> Tuple[List[Dict], List[Dic
             '-follow-redirects',
             '-max-redirects', '10'
         ]
-        
+
         if ports:
             cmd.extend(['-ports', ','.join(str(p) for p in ports)])
-        
+
         start = datetime.now()
-        subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        probed_count = 0
+        live_count = 0
+
+        # Use Popen for real-time output streaming
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1
+        )
+
+        print(f"[RESOLVE] httpx probing {len(subdomains)} hosts on {len(ports)} ports...")
+        print_scanning_status(0)
+
+        # Read stdout line by line (httpx outputs JSON for successful probes)
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+
+            if line.strip():
+                probed_count += 1
+                # Count live hosts from the JSON output
+                try:
+                    data = json.loads(line.strip())
+                    if data.get('status_code'):
+                        live_count += 1
+                except json.JSONDecodeError:
+                    pass
+
+                # Update scanning status
+                print_scanning_status(live_count)
+
+        # Wait for process to complete and capture any stderr
+        _, stderr = process.communicate()
+
+        # Print newline after progress bar
+        print()
+
         elapsed = (datetime.now() - start).total_seconds()
-        
-        print(f"[RESOLVE] httpx completed in {elapsed:.1f}s")
-        
+        print(f"[RESOLVE] httpx completed in {elapsed:.1f}s (probed: {probed_count}, live: {live_count})")
+
         return parse_httpx_output(output_file, subdomains)
-        
+
     finally:
         Path(input_file).unlink(missing_ok=True)
         Path(output_file).unlink(missing_ok=True)

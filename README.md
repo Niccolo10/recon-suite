@@ -44,6 +44,7 @@ python recon.py status target
 | `python recon.py status <project>` | Show project status |
 | `python recon.py run <project> <module>` | Run specific module |
 | `python recon.py list` | List all projects |
+| `python recon.py modules` | List available standalone modules |
 
 ---
 
@@ -151,12 +152,27 @@ To enable Microsoft TI and SecurityTrails, copy `config.json.example` to `config
 - Sublist3r (Search engines)
 - Microsoft Threat Intelligence (optional)
 - SecurityTrails (optional)
+- Google Dork (optional) - runs on main domains only, finds sensitive files/endpoints
 
-**Output:** `phase1/subdomains.csv`
+**Output:** `phase1/subdomains.csv`, `phase1/google_dork_findings.json`
 
 ```csv
 subdomain,apex_domain,sources,confidence,is_wildcard,host_provider,mail_provider,tags,first_seen
 api.target.com,target.com,crtsh;sublist3r,MEDIUM,False,,,2025-01-11T...
+```
+
+**Google Dork config:**
+```json
+{
+  "passive": {
+    "google_dork": {
+      "enabled": true,
+      "api_keys": ["YOUR_GOOGLE_API_KEY"],
+      "cx": "YOUR_CUSTOM_SEARCH_ENGINE_ID",
+      "dorks": ["ext:log", "ext:env", "ext:sql", "inurl:admin", "inurl:api"]
+    }
+  }
+}
 ```
 
 ---
@@ -195,10 +211,39 @@ api.target.com,target.com,crtsh;sublist3r,MEDIUM,False,,,2025-01-11T...
 
 ---
 
-### Phase 5: Vulnerability Checks 🔄 (Coming Soon)
+### Phase 5: Vulnerability Checks ✅
 
-- Subdomain takeover detection
-- Misconfiguration checks
+**Subdomain Takeover Detection:**
+- **nuclei** (primary) - 74+ takeover templates for services like AWS, Azure, Heroku, GitHub Pages, etc.
+- **subzy** (fallback) - fingerprint-based detection from can-i-take-over-xyz
+
+**Candidates:**
+- Dead hosts from phase2 (prime targets)
+- Live hosts with CNAME records (dangling DNS)
+
+**Output:**
+- `phase5/takeovers.csv` - Vulnerable subdomains
+- `phase5/nuclei_takeover.json` - Raw nuclei output
+- `phase5/takeover_metadata.json` - Scan statistics
+
+**Config:**
+```json
+{
+  "vulns": {
+    "takeover": {
+      "nuclei_path": "nuclei",
+      "subzy_path": "subzy",
+      "threads": 25,
+      "timeout": 10,
+      "use_nuclei": true,
+      "use_subzy": true
+    }
+  }
+}
+```
+
+**Coming Soon:**
+- Misconfiguration checks (CORS, exposed .git/.env, security headers)
 
 ---
 
@@ -211,6 +256,8 @@ pip install -r requirements.txt
 
 **External tools:**
 - httpx: https://github.com/projectdiscovery/httpx/releases
+- nuclei: https://github.com/projectdiscovery/nuclei/releases (for takeover detection)
+- subzy: `go install github.com/PentestPad/subzy@latest` (optional, fallback takeover detection)
 
 ---
 

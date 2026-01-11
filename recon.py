@@ -13,12 +13,14 @@ Usage:
     python recon.py status <project>           Show project status
     python recon.py run <project> <module>     Run specific module
     python recon.py list                       List all projects
+    python recon.py modules                    List available standalone modules
 
 Examples:
     python recon.py new capital
     python recon.py passive capital
     python recon.py resolve capital
     python recon.py status capital
+    python recon.py modules
 """
 
 import sys
@@ -230,12 +232,20 @@ def cmd_run(args):
     project = pm.load_project(args.project)
     
     modules = {
+        # Passive tools (can run standalone)
+        'google_dork': ('lib.passive.google_dork', 'run'),
+
+        # Discovery
         'js_analyzer': ('lib.discovery.js_analyzer', 'run'),
         'wayback': ('lib.discovery.wayback', 'run'),
+
+        # Analysis
         'reflection': ('lib.analysis.reflection', 'run'),
         'errors': ('lib.analysis.errors', 'run'),
         'auth_mapper': ('lib.analysis.auth_mapper', 'run'),
         'patterns': ('lib.analysis.patterns', 'run'),
+
+        # Vulns
         'takeover': ('lib.vulns.takeover', 'run'),
         'misconfig': ('lib.vulns.misconfig', 'run'),
     }
@@ -271,15 +281,46 @@ def cmd_list(args):
     """List all projects"""
     pm = ProjectManager()
     projects = pm.list_projects()
-    
+
     if not projects:
         print("\n[*] No projects found")
         print(f"    Create: python recon.py new <name>")
         return
-    
+
     print(f"\n[*] Projects ({len(projects)}):")
     for name in projects:
         print(f"    - {name}")
+
+
+def cmd_modules(args):
+    """List all available standalone modules"""
+    modules = {
+        'passive': [
+            ('google_dork', 'Run Google dork searches for sensitive files'),
+        ],
+        'discovery': [
+            ('js_analyzer', 'Analyze JavaScript files for endpoints/secrets'),
+            ('wayback', 'Fetch historical URLs from Wayback Machine'),
+        ],
+        'analysis': [
+            ('reflection', 'Detect reflection points in responses'),
+            ('errors', 'Detect error messages and stack traces'),
+            ('auth_mapper', 'Map authentication endpoints'),
+            ('patterns', 'Detect interesting patterns in responses'),
+        ],
+        'vulns': [
+            ('takeover', 'Check for subdomain takeover vulnerabilities'),
+            ('misconfig', 'Check for common misconfigurations'),
+        ]
+    }
+
+    print(f"\n[*] Available modules for 'python recon.py run <project> <module>':\n")
+
+    for category, mods in modules.items():
+        print(f"  {category.upper()}:")
+        for name, desc in mods:
+            print(f"    {name:<15} - {desc}")
+        print()
 
 
 def main():
@@ -339,7 +380,11 @@ def main():
     # list
     p = subparsers.add_parser('list', help='List all projects')
     p.set_defaults(func=cmd_list)
-    
+
+    # modules
+    p = subparsers.add_parser('modules', help='List available standalone modules')
+    p.set_defaults(func=cmd_modules)
+
     args = parser.parse_args()
     
     print_banner()
