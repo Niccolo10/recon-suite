@@ -45,6 +45,8 @@ python recon.py status target
 | `python recon.py run <project> <module>` | Run specific module |
 | `python recon.py list` | List all projects |
 | `python recon.py modules` | List available standalone modules |
+| `python recon.py import <project> <file>` | Import domains/URLs (skip passive) |
+| `python recon.py screenshots <project>` | Run/check gowitness screenshots |
 
 ---
 
@@ -195,10 +197,55 @@ api.target.com,target.com,crtsh;sublist3r,MEDIUM,False,,,2025-01-11T...
 
 ---
 
-### Phase 3: Discovery 🔄 (Coming Soon)
+### Phase 3: JavaScript Analysis ✅
 
-- JavaScript endpoint extraction
-- Wayback historical URLs
+**Tools:**
+- HTML Crawler (extracts `<script>` tags)
+- Wayback Machine API (historical JS files)
+- LinkFinder (endpoint extraction)
+- TruffleHog (secret detection)
+- Custom analyzer (context-aware secrets, dangerous functions, comments)
+
+**Features:**
+- JS file discovery via crawling + Wayback (2 years)
+- Automatic deduplication by content hash
+- JS beautification for readable analysis
+- Source map detection and download
+- Context-aware secret detection (HIGH/MEDIUM/LOW confidence)
+- Dangerous function patterns (low false-positive)
+- Interesting comment mining (TODO, FIXME, passwords)
+
+**Output:**
+- `phase3/js_files/` - Downloaded JS files (beautified)
+- `phase3/endpoints.csv` - API endpoints for fuzzing
+- `phase3/secrets.json` - Detected secrets with confidence levels
+- `phase3/dangerous_functions.json` - XSS sinks and injection points
+- `phase3/comments.json` - Interesting developer comments
+- `phase3/js_inventory.csv` - All discovered JS URLs
+
+**Config:**
+```json
+{
+  "discovery": {
+    "js_analyzer": {
+      "enabled": true,
+      "timeout": 30,
+      "max_file_size_mb": 10,
+      "rate_limit": 2
+    },
+    "wayback": {
+      "enabled": true,
+      "years_back": 2
+    },
+    "linkfinder": {
+      "enabled": true
+    },
+    "trufflehog": {
+      "enabled": true
+    }
+  }
+}
+```
 
 ---
 
@@ -247,6 +294,68 @@ api.target.com,target.com,crtsh;sublist3r,MEDIUM,False,,,2025-01-11T...
 
 ---
 
+## Direct Domain Import
+
+Skip passive enumeration when you already have a target list:
+
+```bash
+# Import domains for resolution
+python recon.py import myproject domains.txt
+python recon.py resolve myproject
+
+# Import URLs directly (skip resolution too)
+python recon.py import myproject urls.txt --direct
+python recon.py discover myproject
+```
+
+**Input file format:**
+```
+# domains.txt (one per line)
+api.target.com
+admin.target.com
+app.target.com
+
+# urls.txt (one per line)
+https://api.target.com
+https://admin.target.com:8443
+https://app.target.com/admin
+```
+
+---
+
+## Screenshots (Gowitness)
+
+Gowitness runs automatically in background after resolution. Manual control:
+
+```bash
+# Check status
+python recon.py screenshots myproject --status
+
+# Run manually (background)
+python recon.py screenshots myproject
+
+# Run in foreground (blocking)
+python recon.py screenshots myproject --foreground
+```
+
+**Output:** `phase2/screenshots/`
+- `gowitness.csv` - Screenshot results
+- `gowitness.sqlite3` - Database
+- `*.png` - Screenshot images
+
+**Config:**
+```json
+{
+  "tools": {
+    "gowitness_enabled": true,
+    "gowitness_threads": 10,
+    "gowitness_timeout": 10
+  }
+}
+```
+
+---
+
 ## Requirements
 
 **Python packages:**
@@ -258,6 +367,9 @@ pip install -r requirements.txt
 - httpx: https://github.com/projectdiscovery/httpx/releases
 - nuclei: https://github.com/projectdiscovery/nuclei/releases (for takeover detection)
 - subzy: `go install github.com/PentestPad/subzy@latest` (optional, fallback takeover detection)
+- LinkFinder: `pip install linkfinder` or https://github.com/GerbenJavado/LinkFinder (for JS endpoint extraction)
+- TruffleHog: https://github.com/trufflesecurity/trufflehog/releases (for secret detection)
+- Gowitness: https://github.com/sensepost/gowitness/releases (for screenshots)
 
 ---
 

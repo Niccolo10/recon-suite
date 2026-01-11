@@ -14,13 +14,16 @@ Usage:
     python recon.py run <project> <module>     Run specific module
     python recon.py list                       List all projects
     python recon.py modules                    List available standalone modules
+    python recon.py import <project> <file>    Import domains/URLs directly (skip passive)
+    python recon.py screenshots <project>      Run/check gowitness screenshots
 
 Examples:
     python recon.py new capital
     python recon.py passive capital
     python recon.py resolve capital
     python recon.py status capital
-    python recon.py modules
+    python recon.py import capital urls.txt --direct   # Skip resolution too
+    python recon.py screenshots capital                # Manual screenshot run
 """
 
 import sys
@@ -225,6 +228,13 @@ def cmd_status(args):
         else:
             print(f"      {info['name']}: [--]")
 
+    # Show gowitness status
+    from lib.resolution.gowitness import check_gowitness_status
+    screenshots_status = check_gowitness_status(project['phases']['phase2'])
+    if screenshots_status['screenshots_count'] > 0 or screenshots_status['running']:
+        status_str = "RUNNING" if screenshots_status['running'] else "DONE"
+        print(f"\n    Screenshots: [{status_str}] ({screenshots_status['screenshots_count']} images)")
+
 
 def cmd_run(args):
     """Run a specific module"""
@@ -290,6 +300,106 @@ def cmd_list(args):
     print(f"\n[*] Projects ({len(projects)}):")
     for name in projects:
         print(f"    - {name}")
+
+
+def cmd_import(args):
+    """Import domains/URLs directly, skipping passive enumeration"""
+    from lib.core.importer import import_domains
+
+    pm = ProjectManager()
+
+    # Create project if it doesn't exist
+    try:
+        project = pm.load_project(args.project)
+    except FileNotFoundError:
+        print(f"[*] Creating new project: {args.project}")
+        pm.create_project(args.project)
+        project = pm.load_project(args.project)
+
+    input_file = Path(args.file)
+    if not input_file.exists():
+        print(f"\n[FAIL] File not found: {input_file}")
+        sys.exit(1)
+
+    print(f"\n[*] Importing domains for: {args.project}")
+    result = import_domains(project, input_file, skip_resolution=args.direct)
+
+    if result['success']:
+        print(f"\n[OK] Import complete")
+        if result['mode'] == 'direct':
+            print(f"    URLs imported: {result['urls_imported']}")
+            print(f"    Output: {result['live_file']}")
+            print(f"\n    Next: python recon.py discover {args.project}")
+        else:
+            print(f"    Domains imported: {result['domains_imported']}")
+            print(f"    Output: {result['subdomains_file']}")
+            print(f"\n    Next: python recon.py resolve {args.project}")
+    else:
+        print(f"\n[FAIL] {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+def cmd_screenshots(args):
+    """Run or check gowitness screenshots"""
+    from lib.resolution.gowitness import GowitnessRunner, run_gowitness_background, check_gowitness_status
+
+    pm = ProjectManager()
+    project = pm.load_project(args.project)
+
+    phase2_dir = project['phases']['phase2']
+    live_file = phase2_dir / 'live.csv'
+
+    if not live_file.exists():
+        print(f"\n[FAIL] No live.csv found. Run resolution first:")
+        print(f"    python recon.py resolve {args.project}")
+        sys.exit(1)
+
+    # Check current status
+    status = check_gowitness_status(phase2_dir)
+
+    if args.status:
+        # Just show status
+        print(f"\n[*] Gowitness status for: {args.project}")
+        print(f"    Running: {status['running']}")
+        print(f"    Completed: {status['completed']}")
+        print(f"    Screenshots: {status['screenshots_count']}")
+        print(f"    CSV exists: {status['csv_exists']}")
+        print(f"    DB exists: {status['db_exists']}")
+        return
+
+    if status['running']:
+        print(f"\n[*] Gowitness already running")
+        print(f"    Screenshots so far: {status['screenshots_count']}")
+        return
+
+    # Run gowitness
+    tools_config = project['config'].get('tools', {})
+    runner = GowitnessRunner(tools_config)
+
+    if not runner.is_available():
+        print(f"\n[FAIL] Gowitness not found. Install from:")
+        print(f"    https://github.com/sensepost/gowitness/releases")
+        sys.exit(1)
+
+    print(f"\n[*] Running gowitness for: {args.project}")
+
+    if args.foreground:
+        # Run in foreground (blocking)
+        result = runner.run_screenshots(live_file, phase2_dir, background=False)
+    else:
+        # Run in background
+        result = run_gowitness_background(live_file, phase2_dir, tools_config)
+
+    if result.get('success'):
+        print(f"\n[OK] Gowitness {'completed' if args.foreground else 'started'}")
+        print(f"    URLs: {result.get('urls_count')}")
+        print(f"    Output: {result.get('output_dir')}")
+        if not args.foreground:
+            print(f"    PID: {result.get('pid')}")
+            print(f"\n    Check status: python recon.py screenshots {args.project} --status")
+    else:
+        print(f"\n[FAIL] {result.get('error', 'Unknown error')}")
+        sys.exit(1)
 
 
 def cmd_modules(args):
@@ -384,6 +494,20 @@ def main():
     # modules
     p = subparsers.add_parser('modules', help='List available standalone modules')
     p.set_defaults(func=cmd_modules)
+
+    # import
+    p = subparsers.add_parser('import', help='Import domains/URLs directly (skip passive)')
+    p.add_argument('project', help='Project name')
+    p.add_argument('file', help='File with domains or URLs (one per line)')
+    p.add_argument('--direct', action='store_true', help='Skip resolution too (input must be URLs)')
+    p.set_defaults(func=cmd_import)
+
+    # screenshots
+    p = subparsers.add_parser('screenshots', help='Run/check gowitness screenshots')
+    p.add_argument('project', help='Project name')
+    p.add_argument('--status', action='store_true', help='Just check status, do not run')
+    p.add_argument('--foreground', action='store_true', help='Run in foreground (blocking)')
+    p.set_defaults(func=cmd_screenshots)
 
     args = parser.parse_args()
     

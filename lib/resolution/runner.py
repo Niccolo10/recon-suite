@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
 from ..core.scope import ScopeValidator
+from .gowitness import run_gowitness_background, GowitnessRunner
 
 
 def print_progress_bar(current, total, prefix='Progress', suffix='Complete', length=40):
@@ -98,13 +99,30 @@ def run_resolution(project: Dict) -> Dict:
     
     with open(phase2_dir / 'metadata.json', 'w', encoding='utf-8') as f:
         json.dump(metadata, f, indent=2)
-    
+
+    # Start gowitness in background if enabled
+    gowitness_result = None
+    tools_config = project['config'].get('tools', {})
+    if tools_config.get('gowitness_enabled', True):
+        gowitness_runner = GowitnessRunner(tools_config)
+        if gowitness_runner.is_available():
+            print(f"\n[RESOLVE] Starting gowitness screenshots in background...")
+            gowitness_result = run_gowitness_background(live_file, phase2_dir, tools_config)
+            if gowitness_result.get('success'):
+                print(f"[RESOLVE] Gowitness started (PID: {gowitness_result.get('pid')}, {gowitness_result.get('urls_count')} URLs)")
+                print(f"[RESOLVE] Screenshots will be saved to: {gowitness_result.get('output_dir')}")
+            else:
+                print(f"[RESOLVE] Gowitness failed: {gowitness_result.get('error')}")
+        else:
+            print(f"[RESOLVE] Gowitness not found, skipping screenshots")
+
     return {
         'success': True,
         'live_count': len(live_hosts),
         'dead_count': len(dead_hosts),
         'live_file': str(live_file),
-        'dead_file': str(dead_file)
+        'dead_file': str(dead_file),
+        'gowitness': gowitness_result
     }
 
 
