@@ -9,6 +9,8 @@ env/
 # Project data (keep structure, not data)
 projects/*
 !projects/example/
+.claude
+*tmp*
 
 # Config with secrets (keep example)
 config.json

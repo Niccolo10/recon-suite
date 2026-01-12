@@ -12,6 +12,107 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 
+# Third-party domains to exclude from JS analysis (not in scope for bug bounty)
+THIRD_PARTY_DOMAINS = {
+    # Analytics & tracking
+    'googleapis.com',
+    'googletagmanager.com',
+    'googlesyndication.com',
+    'google-analytics.com',
+    'googleadservices.com',
+    'doubleclick.net',
+    'googleoptimize.com',
+    'facebook.net',
+    'facebook.com',
+    'fbcdn.net',
+    'twitter.com',
+    'twimg.com',
+    'linkedin.com',
+    'licdn.com',
+    'bing.com',
+    'pinterest.com',
+    'snapchat.com',
+    'tiktok.com',
+    # CDNs
+    'cloudflare.com',
+    'cloudflare-dns.com',
+    'cdnjs.cloudflare.com',
+    'jsdelivr.net',
+    'unpkg.com',
+    'bootstrapcdn.com',
+    'jquery.com',
+    'fontawesome.com',
+    # Cookie consent & privacy
+    'cookielaw.org',
+    'onetrust.com',
+    'trustarc.com',
+    'cookiebot.com',
+    'termly.io',
+    'osano.com',
+    # Payment processors (third-party managed)
+    'stripe.com',
+    'paypal.com',
+    'braintreegateway.com',
+    'adyen.com',
+    # Marketing & personalization
+    'dynamicyield.com',
+    'cquotient.com',
+    'salesforce.com',
+    'hubspot.com',
+    'marketo.net',
+    'mailchimp.com',
+    'klaviyo.com',
+    'intercom.io',
+    'zendesk.com',
+    'drift.com',
+    # A/B testing
+    'optimizely.com',
+    'vwo.com',
+    'abtasty.com',
+    # Session replay & analytics
+    'hotjar.com',
+    'fullstory.com',
+    'logrocket.io',
+    'mouseflow.com',
+    'clarity.ms',
+    # Tag managers
+    'segment.com',
+    'segment.io',
+    'tealium.com',
+    # Error tracking (third-party)
+    'sentry.io',
+    'bugsnag.com',
+    'raygun.io',
+    # Chat widgets
+    'crisp.chat',
+    'tawk.to',
+    'livechatinc.com',
+    # Microsoft (external services)
+    'onecdn.static.microsoft',
+    'office365.com',
+    'office.com',
+    'microsoftonline.com',
+    'azure-apim.net',
+    'msecnd.net',
+    # Misc third-party
+    'xgen.dev',
+    'btttag.com',
+    'igodigital.com',
+    'klarnaservices.com',
+    'klarna.com',
+    'recaptcha.net',
+    'gstatic.com',
+    'hcaptcha.com',
+    'newrelic.com',
+    'nr-data.net',
+    'akamaihd.net',
+    'akamai.net',
+    'fastly.net',
+    'edgekey.net',
+    'exacttarget.com',
+}
+
+
 class JSDiscovery:
     """Discovers JavaScript files from live hosts"""
 
@@ -42,6 +143,42 @@ class JSDiscovery:
             if wait_time > 0:
                 time.sleep(wait_time)
         self._last_request = time.time()
+
+    def _is_third_party(self, js_url: str, target_domain: str) -> bool:
+        """
+        Check if a JS URL is from a third-party domain (not in scope).
+
+        Args:
+            js_url: The JavaScript URL to check
+            target_domain: The target domain being scanned
+
+        Returns:
+            True if the URL is third-party and should be excluded
+        """
+        try:
+            parsed = urlparse(js_url)
+            host = parsed.netloc.lower()
+
+            # Remove port if present
+            if ':' in host:
+                host = host.split(':')[0]
+
+            # Check if it's the target domain or subdomain of target
+            if host == target_domain or host.endswith('.' + target_domain):
+                return False
+
+            # Check against third-party blocklist
+            for blocked in THIRD_PARTY_DOMAINS:
+                if host == blocked or host.endswith('.' + blocked):
+                    return True
+
+            # If not in blocklist but also not target domain, it's still third-party
+            # but might be interesting (e.g., company's own CDN, blob storage)
+            # We'll allow these through for now
+            return False
+
+        except Exception:
+            return False
 
     def discover_all(self, hosts: List[Dict]) -> Dict[str, List[Dict]]:
         """
@@ -77,10 +214,21 @@ class JSDiscovery:
         js_files = []
         seen_urls = set()
 
+        # Extract root domain for filtering (e.g., goldengoose.com from www.goldengoose.com)
+        parts = subdomain.split('.')
+        if len(parts) >= 2:
+            root_domain = '.'.join(parts[-2:])
+        else:
+            root_domain = subdomain
+
         # 1. Crawl HTML for script tags
         crawl_results = self._crawl_html(url)
         for js_url, js_type in crawl_results:
             if js_url not in seen_urls:
+                # Filter out third-party scripts
+                if self._is_third_party(js_url, root_domain):
+                    continue
+
                 seen_urls.add(js_url)
                 js_files.append({
                     'url': js_url,
@@ -94,6 +242,10 @@ class JSDiscovery:
             wayback_results = self._query_wayback(subdomain)
             for js_url in wayback_results:
                 if js_url not in seen_urls:
+                    # Filter out third-party scripts
+                    if self._is_third_party(js_url, root_domain):
+                        continue
+
                     seen_urls.add(js_url)
                     js_files.append({
                         'url': js_url,

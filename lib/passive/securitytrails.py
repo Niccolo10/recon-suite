@@ -119,14 +119,31 @@ class SecurityTrailsTool(BaseTool):
         """Process a single domain/IP with pagination"""
         cookie_str = process_input.get('cookie', '')
         proxy = process_input.get('proxy', None)
-        
+
         if not cookie_str:
             self._safe_log(f"  [{self.name}] No cookie for {domain_or_ip}", log_lock)
             return
-        
+
         session = requests.Session()
         cookies = self._parse_cookies(cookie_str)
-        headers = {'User-Agent': self.user_agent}
+
+        # Full browser-like headers to avoid Cloudflare detection
+        headers = {
+            'User-Agent': self.user_agent,
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9,it;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://securitytrails.com/',
+            'Origin': 'https://securitytrails.com',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-CH-UA': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'Sec-CH-UA-Mobile': '?0',
+            'Sec-CH-UA-Platform': '"Windows"',
+        }
         
         is_ip = self._is_ip_address(domain_or_ip)
         endpoint_template = self.endpoint_ip if is_ip else self.endpoint_apex
