@@ -18,9 +18,17 @@ class ScopeValidator:
         self._out_compiled = [self._compile(p) for p in self.out_of_scope_patterns]
     
     def _compile(self, pattern: str) -> re.Pattern:
-        escaped = re.escape(pattern)
-        regex = escaped.replace(r'\*\.', r'([a-zA-Z0-9-]+\.)*')
-        regex = regex.replace(r'\*', r'[a-zA-Z0-9-]*')
+        # Handle .domain.com format (means domain.com and all subdomains)
+        if pattern.startswith('.'):
+            # .example.com -> matches example.com and *.example.com
+            base_domain = pattern[1:]  # Remove leading dot
+            escaped = re.escape(base_domain)
+            # Match apex domain OR any subdomain
+            regex = f'(([a-zA-Z0-9-]+\\.)*)?{escaped}'
+        else:
+            escaped = re.escape(pattern)
+            regex = escaped.replace(r'\*\.', r'([a-zA-Z0-9-]+\.)*')
+            regex = regex.replace(r'\*', r'[a-zA-Z0-9-]*')
         return re.compile(f'^{regex}$', re.IGNORECASE)
     
     def is_in_scope(self, domain: str) -> bool:

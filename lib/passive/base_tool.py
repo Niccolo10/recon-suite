@@ -10,11 +10,19 @@ from pathlib import Path
 
 class BaseTool(ABC):
     """Abstract base class for enumeration tools"""
-    
+
     def __init__(self, config: Dict):
         self.name = "base_tool"
         self.config = config
         self.results = []
+
+    def should_stop(self) -> bool:
+        """Check if execution should stop (user pressed q)"""
+        try:
+            from . import is_stopped
+            return is_stopped()
+        except ImportError:
+            return False
     
     @abstractmethod
     def run(self, domains: List[str]) -> List[Tuple[str, Dict]]:

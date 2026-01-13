@@ -1,4 +1,4 @@
 """Passive subdomain enumeration tools"""
-from .runner import run_passive
+from .runner import run_passive, is_stopped, request_stop
 
-__all__ = ['run_passive']
+__all__ = ['run_passive', 'is_stopped', 'request_stop']

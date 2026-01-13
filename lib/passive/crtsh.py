@@ -27,28 +27,30 @@ class CrtshTool(BaseTool):
     def run(self, domains: List[str]) -> List[Tuple[str, Dict]]:
         """Query crt.sh for each domain"""
         all_results = []
-        
+
         for domain in domains:
+            if self.should_stop():
+                break
+
             print(f"  [{self.name}] Querying {domain}...")
-            
+
             try:
                 subdomains = self._query_domain(domain)
                 print(f"  [{self.name}] Found {len(subdomains)} for {domain}")
-                
+
                 for subdomain in subdomains:
                     metadata = {
                         'source': 'crtsh',
-                        'parent_domain': domain,
-                        'is_wildcard': subdomain.startswith('*.')
+                        'parent_domain': domain
                     }
                     all_results.append((subdomain, metadata))
-                
+
                 time.sleep(1)
-                
+
             except Exception as e:
                 print(f"  [{self.name}] Error for {domain}: {str(e)}")
                 continue
-        
+
         return all_results
     
     def _query_domain(self, domain: str) -> List[str]:
@@ -62,6 +64,8 @@ class CrtshTool(BaseTool):
         last_error = None
 
         for attempt in range(self.max_retries):
+            if self.should_stop():
+                return []
             try:
                 response = requests.get(
                     self.base_url,
@@ -100,8 +104,10 @@ class CrtshTool(BaseTool):
                         if not name:
                             continue
 
-                        # Avoid substring false positives
-                        if name == domain_lc or name.endswith("." + domain_lc) or name.endswith("*." + domain_lc):
+                        # Avoid substring false positives and skip wildcard entries
+                        if name.startswith('*.'):
+                            continue
+                        if name == domain_lc or name.endswith("." + domain_lc):
                             subdomains.add(name)
 
                 return sorted(subdomains)

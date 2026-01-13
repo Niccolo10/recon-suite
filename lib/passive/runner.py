@@ -5,6 +5,8 @@ Orchestrates all passive subdomain enumeration tools.
 
 import csv
 import json
+import sys
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple
@@ -15,23 +17,81 @@ from .crtsh import CrtshTool
 from .sublist3r_tool import Sublist3rTool
 from .alienvault_otx import AlienVaultOTXTool
 
+# Global stop event for graceful shutdown
+_stop_event = threading.Event()
+
+
+def is_stopped() -> bool:
+    """Check if stop was requested"""
+    return _stop_event.is_set()
+
+
+def request_stop():
+    """Request graceful stop"""
+    _stop_event.set()
+
+
+def _keyboard_listener():
+    """Listen for 'q' keypress to quit"""
+    try:
+        if sys.platform == 'win32':
+            import msvcrt
+            while not _stop_event.is_set():
+                if msvcrt.kbhit():
+                    key = msvcrt.getch()
+                    if key in (b'q', b'Q'):
+                        print("\n[!] Quit requested - stopping gracefully...")
+                        _stop_event.set()
+                        break
+                _stop_event.wait(0.1)  # Check every 100ms
+        else:
+            # Unix/Linux/Mac
+            import select
+            import tty
+            import termios
+            old_settings = termios.tcgetattr(sys.stdin)
+            try:
+                tty.setcbreak(sys.stdin.fileno())
+                while not _stop_event.is_set():
+                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                        key = sys.stdin.read(1)
+                        if key in ('q', 'Q'):
+                            print("\n[!] Quit requested - stopping gracefully...")
+                            _stop_event.set()
+                            break
+            finally:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+    except Exception:
+        pass  # Silently fail if keyboard listener can't start
+
+
+def normalize_domain(domain: str) -> str:
+    """Strip wildcard prefix from domain for API queries"""
+    d = domain.strip().lower()
+    if d.startswith('*.'):
+        d = d[2:]
+    return d
+
 
 def run_passive(project: Dict) -> Dict:
     """
     Run passive subdomain enumeration.
-    
+
     Args:
         project: Project configuration dict
-        
+
     Returns:
         Result dict with success status and output info
     """
-    domains = project['domains']
+    raw_domains = project['domains']
     config = project['config']
     output_dir = project['phases']['phase1']
-    
-    if not domains:
+
+    if not raw_domains:
         return {'success': False, 'error': 'No domains in domains.txt'}
+
+    # Normalize domains - strip wildcard prefix for API queries
+    domains = list(set(normalize_domain(d) for d in raw_domains))
     
     print(f"\n[PASSIVE] Starting enumeration for {len(domains)} domain(s)")
     print(f"[PASSIVE] Domains: {', '.join(domains)}")
@@ -87,47 +147,70 @@ def run_passive(project: Dict) -> Dict:
 
     if not tools:
         return {'success': False, 'error': 'No tools enabled'}
-    
+
     print(f"[PASSIVE] Tools: {', '.join(name for name, _ in tools)}")
+    print(f"[PASSIVE] Press 'q' to quit at any time")
+
+    # Reset and start keyboard listener
+    _stop_event.clear()
+    kb_thread = threading.Thread(target=_keyboard_listener, daemon=True)
+    kb_thread.start()
 
     # Check if parallel execution is enabled
     parallel_enabled = passive_config.get('parallel_tools', False)
 
     # Run each tool
     all_results = {}
+    was_stopped = False
 
-    if parallel_enabled and len(tools) > 1:
-        print(f"[PASSIVE] Running {len(tools)} tools in PARALLEL...")
+    try:
+        if parallel_enabled and len(tools) > 1:
+            print(f"[PASSIVE] Running {len(tools)} tools in PARALLEL...")
 
-        def run_tool(tool_tuple):
-            tool_name, tool = tool_tuple
-            try:
-                results = tool.run(domains)
-                return tool_name, results, None
-            except Exception as e:
-                return tool_name, [], str(e)
+            def run_tool(tool_tuple):
+                tool_name, tool = tool_tuple
+                try:
+                    if is_stopped():
+                        return tool_name, [], "Stopped by user"
+                    results = tool.run(domains)
+                    return tool_name, results, None
+                except Exception as e:
+                    return tool_name, [], str(e)
 
-        with ThreadPoolExecutor(max_workers=len(tools)) as executor:
-            futures = {executor.submit(run_tool, t): t[0] for t in tools}
-            for future in as_completed(futures):
-                tool_name, results, error = future.result()
-                if error:
-                    print(f"[PASSIVE] {tool_name} failed: {error}")
-                else:
+            with ThreadPoolExecutor(max_workers=len(tools)) as executor:
+                futures = {executor.submit(run_tool, t): t[0] for t in tools}
+                for future in as_completed(futures):
+                    if is_stopped():
+                        was_stopped = True
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+                    tool_name, results, error = future.result()
+                    if error:
+                        print(f"[PASSIVE] {tool_name} failed: {error}")
+                    else:
+                        print(f"[PASSIVE] {tool_name}: {len(results)} subdomains")
+                    all_results[tool_name] = results
+        else:
+            if len(tools) > 1:
+                print(f"[PASSIVE] Running tools sequentially (set parallel_tools: true in config for parallel)")
+            for tool_name, tool in tools:
+                if is_stopped():
+                    was_stopped = True
+                    break
+                print(f"\n[PASSIVE] Running {tool_name}...")
+                try:
+                    results = tool.run(domains)
+                    all_results[tool_name] = results
                     print(f"[PASSIVE] {tool_name}: {len(results)} subdomains")
-                all_results[tool_name] = results
-    else:
-        if len(tools) > 1:
-            print(f"[PASSIVE] Running tools sequentially (set parallel_tools: true in config for parallel)")
-        for tool_name, tool in tools:
-            print(f"\n[PASSIVE] Running {tool_name}...")
-            try:
-                results = tool.run(domains)
-                all_results[tool_name] = results
-                print(f"[PASSIVE] {tool_name}: {len(results)} subdomains")
-            except Exception as e:
-                print(f"[PASSIVE] {tool_name} failed: {str(e)}")
-                all_results[tool_name] = []
+                except Exception as e:
+                    print(f"[PASSIVE] {tool_name} failed: {str(e)}")
+                    all_results[tool_name] = []
+    finally:
+        # Stop keyboard listener
+        _stop_event.set()
+
+    if was_stopped:
+        print(f"\n[!] Execution stopped by user")
     
     # Deduplicate
     print(f"\n[PASSIVE] Deduplicating...")
@@ -144,8 +227,16 @@ def run_passive(project: Dict) -> Dict:
     
     for tool_name, results in all_results.items():
         tool_file = temp_dir / f'{tool_name}.json'
+        out_list = []
+        for item in results:
+            if isinstance(item, (list, tuple)) and len(item) == 2 and isinstance(item[1], dict):
+                s, m = item
+            else:
+                s, m = item, {}
+            out_list.append({'subdomain': s, 'metadata': m})
+
         with open(tool_file, 'w', encoding='utf-8') as f:
-            json.dump([{'subdomain': s, 'metadata': m} for s, m in results], f, indent=2)
+            json.dump(out_list, f, indent=2)
     
     # Save metadata
     metadata = {
@@ -165,14 +256,24 @@ def run_passive(project: Dict) -> Dict:
     }
 
 
-def deduplicate(tool_results: Dict[str, List[Tuple[str, Dict]]]) -> Dict[str, Dict]:
-    """Deduplicate results from multiple tools with confidence scoring"""
+def deduplicate(tool_results: Dict[str, List]) -> Dict[str, Dict]:
+    """Deduplicate results from multiple tools with confidence scoring.
+
+    Accepts tool result items in either of these forms:
+    - `(subdomain, metadata_dict)`
+    - `subdomain` (string)
+    """
     merged = {}
-    
+
     for tool_name, results in tool_results.items():
-        for subdomain, metadata in results:
+        for item in results:
+            if isinstance(item, (list, tuple)) and len(item) == 2 and isinstance(item[1], dict):
+                subdomain, metadata = item
+            else:
+                subdomain, metadata = item, {}
+
             key = subdomain.lower().strip()
-            
+
             if key not in merged:
                 merged[key] = {
                     'original': subdomain,
