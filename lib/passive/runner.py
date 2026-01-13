@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .crtsh import CrtshTool
 from .sublist3r_tool import Sublist3rTool
+from .alienvault_otx import AlienVaultOTXTool
 
 
 def run_passive(project: Dict) -> Dict:
@@ -70,9 +71,19 @@ def run_passive(project: Dict) -> Dict:
     if gd_config.get('enabled', False) and gd_config.get('api_keys') and gd_config.get('cx'):
         try:
             from .google_dork import GoogleDorkTool
-            tools.append(('google_dork', GoogleDorkTool(gd_config)))
+            gd_tool = GoogleDorkTool(gd_config)
+            gd_tool._output_dir = output_dir  # Store output dir for report generation
+            tools.append(('google_dork', gd_tool))
         except ValueError as e:
             print(f"[PASSIVE] Google Dork: {e}")
+
+    # AlienVault OTX (enabled by default, optional API key)
+    otx_config = passive_config.get('alienvault_otx', {})
+    if otx_config.get('enabled', True):
+        try:
+            tools.append(('alienvault_otx', AlienVaultOTXTool(otx_config)))
+        except ValueError as e:
+            print(f"[PASSIVE] AlienVault OTX: {e}")
 
     if not tools:
         return {'success': False, 'error': 'No tools enabled'}

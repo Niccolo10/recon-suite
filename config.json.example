@@ -50,21 +50,49 @@
       "engines": null
     },
 
+    "alienvault_otx": {
+      "enabled": true,
+      "timeout": 30,
+      "max_retries": 3,
+      "retry_delay": 2,
+      "api_key": null
+    },
+
     "google_dork": {
       "enabled": false,
       "api_keys": ["YOUR_GOOGLE_API_KEY"],
       "cx": "YOUR_CUSTOM_SEARCH_ENGINE_ID",
-      "dorks": [
-        "ext:log",
-        "ext:env",
-        "ext:sql",
-        "ext:bak",
-        "ext:conf",
-        "ext:config",
-        "inurl:admin",
-        "inurl:api",
-        "intitle:index.of"
-      ],
+      "dorks": {
+        "enabled_categories": [
+          "git_exposure",
+          "env_credentials",
+          "firebase_misconfig",
+          "database_dumps",
+          "jwt_oauth_secrets",
+          "api_keys_exposed",
+          "spring_actuator",
+          "debug_endpoints",
+          "graphql_introspection",
+          "swagger_openapi",
+          "admin_consoles",
+          "backup_files",
+          "cicd_secrets",
+          "kubernetes_exposure",
+          "log_exposure",
+          "source_maps",
+          "ssrf_indicators",
+          "open_redirect",
+          "internal_paths",
+          "version_disclosure",
+          "directory_listing",
+          "github_leaks",
+          "cloud_storage",
+          "paste_sites",
+          "project_management",
+          "code_sharing",
+          "documentation_leaks"
+        ]
+      },
       "results_per_query": 10,
       "request_interval": 2,
       "timeout": 30

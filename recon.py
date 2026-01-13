@@ -37,17 +37,22 @@ sys.path.insert(0, str(Path(__file__).parent / 'lib'))
 from lib.core.project import ProjectManager
 
 
-# ASCII Banner
-BANNER = """
-╦═╗┌─┐┌─┐┌─┐┌┐┌  ╔═╗┬ ┬┬┌┬┐┌─┐
-╠╦╝├┤ │  │ ││││  ╚═╗│ ││ │ ├┤ 
-╩╚═└─┘└─┘└─┘┘└┘  ╚═╝└─┘┴ ┴ └─┘
+# ASCII Banner (ASCII-safe for Windows compatibility)
+BANNER = r"""
+ ____                        ____        _ _
+|  _ \ ___  ___ ___  _ __   / ___| _   _(_) |_ ___
+| |_) / _ \/ __/ _ \| '_ \  \___ \| | | | | __/ _ \
+|  _ <  __/ (_| (_) | | | |  ___) | |_| | | ||  __/
+|_| \_\___|\___\___/|_| |_| |____/ \__,_|_|\__\___|
         Bug Bounty Recon Framework
 """
 
 
 def print_banner():
-    print(BANNER)
+    try:
+        print(BANNER)
+    except UnicodeEncodeError:
+        print("\n=== Recon Suite - Bug Bounty Recon Framework ===\n")
 
 
 def cmd_new(args):

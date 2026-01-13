@@ -4,9 +4,18 @@
 
 ```
 ╦═╗┌─┐┌─┐┌─┐┌┐┌  ╔═╗┬ ┬┬┌┬┐┌─┐
-╠╦╝├┤ │  │ ││││  ╚═╗│ ││ │ ├┤ 
+╠╦╝├┤ │  │ ││││  ╚═╗│ ││ │ ├┤
 ╩╚═└─┘└─┘└─┘┘└┘  ╚═╝└─┘┴ ┴ └─┘
 ```
+
+A modular, phase-based reconnaissance framework designed for professional bug bounty hunters. Features intelligent subdomain enumeration, JavaScript analysis, vulnerability detection, and expert-level Google dorking with 27 categories of surgical queries curated from real P1/P2 findings.
+
+**Key Features:**
+- Multi-source passive enumeration (crt.sh, SecurityTrails, AlienVault OTX, Microsoft TI)
+- Expert Google dork database with 100+ targeted queries across 27 vulnerability categories
+- JavaScript analysis with secret detection, endpoint extraction, and source map discovery
+- Automated subdomain takeover detection via Nuclei and Subzy
+- Scope-aware filtering and deduplication throughout the pipeline
 
 ---
 
@@ -109,13 +118,18 @@ target.io
 
 ### config.json (global)
 
-Default config enables crt.sh and Sublist3r only.
+Default config enables crt.sh, Sublist3r, and AlienVault OTX.
 
 To enable Microsoft TI and SecurityTrails, copy `config.json.example` to `config.json` and fill in your tokens:
 
 ```json
 {
   "passive": {
+    "alienvault_otx": {
+      "enabled": true,
+      "timeout": 30,
+      "api_key": "YOUR_OTX_API_KEY"
+    },
     "microsoft_ti": {
       "enabled": true,
       "processes_input": [
@@ -140,6 +154,7 @@ To enable Microsoft TI and SecurityTrails, copy `config.json.example` to `config
 ```
 
 **Getting tokens:**
+- **AlienVault OTX**: Get free API key at otx.alienvault.com (optional, works without key but with rate limits)
 - **Microsoft TI**: Login to security.microsoft.com, intercept with Burp, copy `Authorization` header
 - **SecurityTrails**: Login to securitytrails.com, copy cookies and sec_id from URL
 
@@ -152,16 +167,26 @@ To enable Microsoft TI and SecurityTrails, copy `config.json.example` to `config
 **Tools:**
 - crt.sh (Certificate Transparency)
 - Sublist3r (Search engines)
+- AlienVault OTX (Passive DNS + URL list)
 - Microsoft Threat Intelligence (optional)
 - SecurityTrails (optional)
-- Google Dork (optional) - runs on main domains only, finds sensitive files/endpoints
+- **Google Dork** (optional) - Expert-level dorking with 27 vulnerability categories
 
-**Output:** `phase1/subdomains.csv`, `phase1/google_dork_findings.json`
+**Output:** `phase1/subdomains.csv`, `phase1/google_dork_findings.json`, `phase1/google_dork_findings_report.txt`
 
 ```csv
 subdomain,apex_domain,sources,confidence,is_wildcard,host_provider,mail_provider,tags,first_seen
-api.target.com,target.com,crtsh;sublist3r,MEDIUM,False,,,2025-01-11T...
+api.target.com,target.com,crtsh;sublist3r;alienvault_otx,HIGH,False,,,2025-01-11T...
 ```
+
+**Google Dork Research Sources:**
+The dork database is curated from:
+- Real P1/P2 HackerOne/Bugcrowd disclosed reports
+- OWASP Testing Guide and Cheat Sheets
+- Security conference talks (DEF CON, Black Hat, BSides)
+- can-i-take-over-xyz and similar research projects
+- Framework-specific security documentation (Spring, Laravel, Django, Rails)
+- Cloud provider security best practices (AWS, Azure, GCP)
 
 **Google Dork config:**
 ```json
@@ -171,11 +196,78 @@ api.target.com,target.com,crtsh;sublist3r,MEDIUM,False,,,2025-01-11T...
       "enabled": true,
       "api_keys": ["YOUR_GOOGLE_API_KEY"],
       "cx": "YOUR_CUSTOM_SEARCH_ENGINE_ID",
-      "dorks": ["ext:log", "ext:env", "ext:sql", "inurl:admin", "inurl:api"]
+      "dorks": {
+        "enabled_categories": [
+          "git_exposure",
+          "env_credentials",
+          "firebase_misconfig",
+          "database_dumps",
+          "jwt_oauth_secrets",
+          "api_keys_exposed",
+          "spring_actuator",
+          "debug_endpoints",
+          "graphql_introspection",
+          "swagger_openapi",
+          "admin_consoles",
+          "backup_files",
+          "cicd_secrets",
+          "kubernetes_exposure",
+          "log_exposure",
+          "github_leaks",
+          "cloud_storage",
+          "paste_sites",
+          "project_management"
+        ]
+      }
     }
   }
 }
 ```
+
+**Dork Categories (27 total, organized by severity):**
+
+**CRITICAL - Immediate exploitation potential:**
+| Category | Description | Example Finds |
+|----------|-------------|---------------|
+| `git_exposure` | Exposed .git directories | Full source code via git-dumper |
+| `env_credentials` | Environment files with secrets | AWS keys, DB passwords, API tokens |
+| `firebase_misconfig` | Firebase with open rules | Read/write access to user data |
+| `database_dumps` | SQL exports with user data | Credentials, PII, payment info |
+| `jwt_oauth_secrets` | JWT secrets and OAuth creds | Account takeover via forged tokens |
+| `api_keys_exposed` | Hardcoded API keys | Stripe, AWS, Google, Slack tokens |
+
+**HIGH - Significant security impact:**
+| Category | Description | Example Finds |
+|----------|-------------|---------------|
+| `spring_actuator` | Spring Boot endpoints | /actuator/heapdump, /env, RCE via Jolokia |
+| `debug_endpoints` | Framework debug panels | Laravel Telescope, Symfony Profiler, phpinfo |
+| `graphql_introspection` | GraphQL schema exposed | Full API schema, internal queries |
+| `swagger_openapi` | API documentation | Hidden endpoints, auth bypass hints |
+| `admin_consoles` | Admin panels | Jenkins, Grafana, Kubernetes Dashboard |
+| `backup_files` | Backup/config files | wp-config.php.bak, .sql.gz archives |
+| `cicd_secrets` | CI/CD configs with secrets | GitHub Actions, Jenkinsfile credentials |
+| `kubernetes_exposure` | K8s configs/dashboards | kubeconfig files, cluster takeover |
+| `log_exposure` | Log files with secrets | Session tokens, API keys in logs |
+
+**MEDIUM - Requires chaining or limited impact:**
+| Category | Description | Example Finds |
+|----------|-------------|---------------|
+| `source_maps` | JS source maps | Unminified source code disclosure |
+| `ssrf_indicators` | URL fetch parameters | SSRF entry points for exploitation |
+| `open_redirect` | Redirect parameters | OAuth token theft, phishing |
+| `internal_paths` | Error pages with paths | Internal structure disclosure |
+| `version_disclosure` | Version information | CVE mapping for known vulns |
+| `directory_listing` | Open directories | Sensitive file discovery |
+
+**EXTERNAL SOURCES - Third-party leaks:**
+| Category | Description | Example Finds |
+|----------|-------------|---------------|
+| `github_leaks` | GitHub credential leaks | Hardcoded passwords in repos |
+| `cloud_storage` | Cloud bucket exposure | S3, Azure Blob, GCS misconfigs |
+| `paste_sites` | Pastebin/paste site leaks | Dumped credentials, configs |
+| `project_management` | Trello/Jira public boards | Internal docs, API keys |
+| `code_sharing` | Code snippets with secrets | Replit, CodePen, JSFiddle |
+| `documentation_leaks` | Public internal docs | GitBook, ReadTheDocs exposure |
 
 ---
 
